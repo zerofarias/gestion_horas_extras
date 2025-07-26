@@ -1,0 +1,46 @@
+[2025-07-25 19:58:46] --- [INICIO] Sincronización Automática ---
+[2025-07-25 19:58:46] Buscando eventos entre: 2025-07-18T19:58:46-03:00 y 2025-07-25T19:58:46-03:00
+[2025-07-25 19:59:08] Respuesta del reloj recibida. Se encontraron 192 eventos en total.
+[2025-07-25 19:59:08] --- [FIN] Sincronización Automática ---
+[2025-07-25 20:02:20] --- [INICIO] Sincronización Automática ---
+[2025-07-25 20:02:20] Buscando eventos entre: 2025-07-18T20:02:20-03:00 y 2025-07-25T20:02:20-03:00
+[2025-07-25 20:02:42] Respuesta del reloj recibida. Se encontraron 192 eventos en total.
+[2025-07-25 20:02:42] --- [FIN] Sincronización Automática ---
+[2025-07-25 20:06:18] --- [INICIO] Sincronización Automática ---
+[2025-07-25 20:06:18] Buscando eventos entre: 2025-07-18T20:06:18-03:00 y 2025-07-25T20:06:18-03:00
+[2025-07-25 20:06:42] Respuesta del reloj recibida. Se encontraron 192 eventos en total.
+[2025-07-25 20:06:42] --- [FIN] Sincronización Automática ---
+[2025-07-25 20:09:08] --- [INICIO] Sincronización Automática ---
+[2025-07-25 20:09:08] Buscando eventos entre: 2025-07-22T20:09:08-03:00 y 2025-07-25T20:09:08-03:00
+[2025-07-25 20:09:20] Respuesta del reloj recibida. Se encontraron 101 eventos en total.
+[2025-07-25 20:09:20] Se limpiaron los registros existentes para 3 usuarios en las fechas afectadas.
+[2025-07-25 20:09:20] Se insertaron 101 eventos individuales en la tabla de auditoría.
+[2025-07-25 20:09:20] Procesamiento finalizado. Se guardaron los resúmenes diarios de 3 empleados.
+[2025-07-25 20:09:20] --- [FIN] Sincronización Automática ---
+[2025-07-25 20:13:05] --- [INICIO] Sincronización Automática ---
+[2025-07-25 20:13:05] Buscando eventos entre: 2025-07-22T20:13:05-03:00 y 2025-07-25T20:13:05-03:00
+[2025-07-25 20:13:17] Respuesta del reloj recibida. Se encontraron 101 eventos en total.
+[2025-07-25 20:13:17] Procesamiento de eventos individuales finalizado. Nuevos: 0. Duplicados ignorados: 20.
+[2025-07-25 20:13:17] --- [FIN] Sincronización Automática ---
+[2025-07-25 20:13:56] --- [INICIO] Sincronización Automática ---
+[2025-07-25 20:13:56] Buscando eventos entre: 2025-07-22T20:13:56-03:00 y 2025-07-25T20:13:56-03:00
+[2025-07-25 20:14:08] Respuesta del reloj recibida. Se encontraron 101 eventos en total.
+[2025-07-25 20:14:08] Procesamiento de eventos individuales finalizado. Nuevos: 0. Duplicados ignorados: 20.
+[2025-07-25 20:14:08] --- [FIN] Sincronización Automática ---
+[2025-07-25 20:14:52] --- [INICIO] Sincronización Automática ---
+[2025-07-25 20:14:52] Buscando eventos entre: 2025-06-25T20:14:52-03:00 y 2025-07-25T20:14:52-03:00
+[2025-07-25 20:16:44] Respuesta del reloj recibida. Se encontraron 842 eventos en total.
+[2025-07-25 20:16:44] Procesamiento de eventos individuales finalizado. Nuevos: 165. Duplicados ignorados: 0.
+[2025-07-25 20:16:44] Recalculando resúmenes diarios para los días afectados...
+[2025-07-25 20:16:44] Se recalcularon 61 resúmenes diarios.
+[2025-07-25 20:16:44] --- [FIN] Sincronización Automática ---
+[2025-07-26 13:55:06] --- [INICIO] Sincronización Automática ---
+[2025-07-26 13:55:06] Buscando eventos entre: 2025-06-26T13:55:06-03:00 y 2025-07-26T13:55:06-03:00
+[2025-07-26 13:57:06] Respuesta del reloj recibida. Se encontraron 840 eventos en total.
+[2025-07-26 13:57:06] Procesamiento de eventos individuales finalizado. Nuevos: 4. Duplicados ignorados: 163.
+[2025-07-26 13:57:06] Recalculando resúmenes diarios para los días afectados...
+[2025-07-26 13:57:06] Se recalcularon 3 resúmenes diarios.
+[2025-07-26 13:57:06] --- [FIN] Sincronización Automática ---
+[2025-07-26 13:59:16] --- [INICIO] Sincronización Automática ---
+[2025-07-26 13:59:16] Buscando eventos entre: 2025-06-26T13:59:16-03:00 y 2025-07-26T13:59:16-03:00
+[2025-07-26 13:59:37] ERROR: No se pudo conectar con el reloj (Código HTTP: 0).

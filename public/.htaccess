@@ -1,0 +1,15 @@
+<IfModule mod_rewrite.c>
+  # Activa el motor de reescritura
+  RewriteEngine On
+
+  # Condición: Si el archivo solicitado NO es un archivo físico...
+  RewriteCond %{REQUEST_FILENAME} !-f
+  # Condición: Y si el archivo solicitado NO es un directorio...
+  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # ...entonces, reescribe la URL a: index.php?url=[lo que sea que venía en la URL]
+  # Ejemplo: /login/process  ->  /index.php?url=login/process
+  # El [L] significa que es la última regla a aplicar.
+  # El [QSA] (Query String Append) se asegura de que si había otros parámetros GET, se mantengan.
+  RewriteRule ^(.*)$ index.php?url=$1 [L,QSA]
+</IfModule>

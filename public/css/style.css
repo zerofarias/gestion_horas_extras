@@ -1,0 +1,149 @@
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+    border: none;
+    border-radius: 0.75rem;
+}
+
+.form-control:focus {
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.table {
+    font-size: 0.9rem;
+}
+
+.navbar .navbar-brand {
+    font-weight: bold;
+}
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+    border: none;
+    border-radius: 0.75rem;
+}
+
+/* ... (tus otros estilos) ... */
+
+
+/* --- INICIO DE NUEVOS ESTILOS PARA EL REDISEÑO --- */
+
+.welcome-banner {
+    background: linear-gradient(135deg, #0d6efd, #0dcaf0);
+    color: white;
+    padding: 2rem;
+    border-radius: 0.75rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    border: none;
+    border-radius: 0.75rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+}
+
+.stat-card .icon {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    font-size: 5rem;
+    opacity: 0.2;
+    transform: rotate(15deg);
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(45deg, #0d6efd, #6f42c1);
+}
+
+.bg-gradient-success {
+    background: linear-gradient(45deg, #198754, #20c997);
+}
+
+.bg-gradient-warning {
+    background: linear-gradient(45deg, #ffc107, #fd7e14);
+}
+.btn-pulse {
+    animation: pulse-animation 2s infinite;
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+}
+
+@keyframes pulse-animation {
+    0% {
+        transform: scale(1);
+    }
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+}
+.fc-event-success {
+    background-color: #198754 !important;
+    border-color: #198754 !important;
+}
+
+.fc-event-danger {
+    background-color: #dc3545 !important;
+    border-color: #dc3545 !important;
+}
+
+.suggestion-item {
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    border-left: 5px solid #0d6efd; /* Color por defecto */
+    background-color: #fff;
+    border-radius: 0 0.5rem 0.5rem 0;
+    position: relative;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.suggestion-item .suggestion-text {
+    font-size: 1.1rem;
+    color: #495057;
+}
+
+.suggestion-item .suggestion-date {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+/* Variaciones de color para los bordes */
+.suggestion-item.border-color-1 { border-left-color: #0d6efd; } /* Azul */
+.suggestion-item.border-color-2 { border-left-color: #198754; } /* Verde */
+.suggestion-item.border-color-3 { border-left-color: #ffc107; } /* Amarillo */
+.suggestion-item.border-color-4 { border-left-color: #6f42c1; } /* Púrpura */
+
+
+.employee-list-item {
+    transition: background-color 0.2s ease-in-out;
+    border-radius: 0.375rem; /* 6px */
+    padding: 0.5rem 0.75rem; /* 8px 12px */
+}
+
+.employee-list-item:hover {
+    background-color: #f8f9fa; /* Un gris muy claro */
+}
+
+.employee-list-item img {
+    transition: transform 0.2s ease-in-out;
+}
+
+.employee-list-item:hover img {
+    transform: scale(1.5); /* Aumenta el tamaño de la imagen al 150% */
+}

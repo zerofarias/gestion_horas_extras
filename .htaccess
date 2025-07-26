@@ -1,0 +1,12 @@
+<IfModule mod_rewrite.c>
+  # Activa el motor de reescritura de URLs
+  RewriteEngine On
+
+  # Redirige la petición raíz (ej: http://localhost/gestion_horas_extras/)
+  # a la carpeta /public/
+  RewriteRule ^$ public/ [L]
+
+  # Redirige cualquier otra petición (ej: /login/process)
+  # a la carpeta /public/ (ej: /public/login/process)
+  RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

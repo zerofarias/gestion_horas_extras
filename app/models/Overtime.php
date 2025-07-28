@@ -150,5 +150,25 @@ class Overtime {
                         GROUP BY day_of_week");
         return $this->db->resultSet();
     }
+
+    public function getClosureSummaryData($companyId) {
+        $this->db->query("
+            SELECT 
+                u.full_name,
+                SUM(IF(o.type = 50, o.hours, 0)) as total_50,
+                SUM(IF(o.type = 100, o.hours, 0)) as total_100,
+                SUM(o.is_holiday) as total_feriados_count,
+                SUM(o.hours) as total_hours
+            FROM overtime_entries o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.status = 'pending' AND u.company_id = :company_id
+            GROUP BY o.user_id, u.full_name
+            HAVING SUM(o.hours) > 0
+            ORDER BY u.full_name
+        ");
+        $this->db->bind(':company_id', $companyId);
+        return $this->db->resultSet();
+    }
+
 }
 ?>

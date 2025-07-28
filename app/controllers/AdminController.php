@@ -53,65 +53,67 @@ class AdminController {
     // --- Métodos del Dashboard e Historial ---
 
     public function dashboard(){
-        if (!isset($_SESSION['user_company_id'])) {
-            $adminUser = $this->userModel->getUserById($_SESSION['user_id']);
-            $_SESSION['user_company_id'] = $adminUser->company_id;
-        }
-        $companyId = $_SESSION['user_company_id'];
-        
-        // --- KPIs ---
-        $activeUsers = $this->userModel->countActiveUsersByCompany($companyId);
-        $workingNow = $this->workScheduleModel->countWorkingNowByCompany($companyId);
-        $onLeaveToday = $this->requestModel->countOnLeaveTodayByCompany($companyId);
-        $pendingRequests = $this->requestModel->getPendingRequestsWithDetails($companyId);
-        $pendingOvertimeTotals = $this->overtimeModel->getPendingTotalsByType();
-        $employeesWithPending = $this->overtimeModel->countEmployeesWithPendingHours();
-
-        // --- Gráficos ---
-        $overtime_50 = isset($pendingOvertimeTotals->total_50) ? $pendingOvertimeTotals->total_50 : 0;
-        $overtime_100 = isset($pendingOvertimeTotals->total_100) ? $pendingOvertimeTotals->total_100 : 0;
-        
-        $topEmployees = $this->overtimeModel->getTopEmployeesByPendingHours(5);
-        
-        $overtimeByDayRaw = $this->overtimeModel->getPendingHoursByDayOfWeek();
-        $overtimeByDay = array_fill(0, 7, 0);
-        if(!empty($overtimeByDayRaw)){
-            foreach($overtimeByDayRaw as $day) { $overtimeByDay[$day->day_of_week - 1] = $day->total_hours; }
-        }
-
-        $monthRequests = $this->requestModel->getMonthlyRequestSummary($companyId, date('Y-m'));
-        $requestLabels = array(); $requestData = array();
-        if(!empty($monthRequests)){
-            foreach($monthRequests as $req){ $requestLabels[] = $req->type_name; $requestData[] = $req->count; }
-        }
-
-        // --- Paneles de Acción y Comunidad ---
-        $upcomingBirthdays = $this->userModel->getUpcomingBirthdays($companyId, 7);
-        $latestSuggestion = $this->suggestionModel->getLatestSuggestionByCompany($companyId);
-
-        $data = array(
-            'stats' => array(
-                'active_users' => $activeUsers,
-                'working_now' => $workingNow,
-                'on_leave_today' => $onLeaveToday,
-                'pending_requests_count' => count($pendingRequests),
-                'overtime_50' => $overtime_50,
-                'overtime_100' => $overtime_100,
-                'employees_with_pending' => $employeesWithPending
-            ),
-            'charts' => array(
-                'overtime_distribution' => json_encode(array($overtime_50, $overtime_100)),
-                'overtime_by_day' => json_encode($overtimeByDay),
-                'requests' => array('labels' => json_encode($requestLabels), 'data' => json_encode($requestData))
-            ),
-            'top_employees' => $topEmployees,
-            'pending_requests' => $pendingRequests,
-            'upcoming_birthdays' => $upcomingBirthdays,
-            'latest_suggestion' => $latestSuggestion
-        );
-
-        $this->view('admin/dashboard', $data);
+    if (!isset($_SESSION['user_company_id'])) {
+        $adminUser = $this->userModel->getUserById($_SESSION['user_id']);
+        $_SESSION['user_company_id'] = $adminUser->company_id;
     }
+    $companyId = $_SESSION['user_company_id'];
+    
+    // --- KPIs ---
+    $activeUsers = $this->userModel->countActiveUsersByCompany($companyId);
+    $workingNow = $this->workScheduleModel->countWorkingNowByCompany($companyId);
+    $onLeaveToday = $this->requestModel->countOnLeaveTodayByCompany($companyId);
+    $pendingRequests = $this->requestModel->getPendingRequestsWithDetails($companyId);
+    $pendingOvertimeTotals = $this->overtimeModel->getPendingTotalsByType();
+    $employeesWithPending = $this->overtimeModel->countEmployeesWithPendingHours();
+
+    // --- Gráficos ---
+    $overtime_50 = isset($pendingOvertimeTotals->total_50) ? $pendingOvertimeTotals->total_50 : 0;
+    $overtime_100 = isset($pendingOvertimeTotals->total_100) ? $pendingOvertimeTotals->total_100 : 0;
+    
+    $topEmployees = $this->overtimeModel->getTopEmployeesByPendingHours(5);
+    
+    $overtimeByDayRaw = $this->overtimeModel->getPendingHoursByDayOfWeek();
+    $overtimeByDay = array_fill(0, 7, 0);
+    if(!empty($overtimeByDayRaw)){
+        foreach($overtimeByDayRaw as $day) { $overtimeByDay[$day->day_of_week - 1] = $day->total_hours; }
+    }
+
+    $monthRequests = $this->requestModel->getMonthlyRequestSummary($companyId, date('Y-m'));
+    $requestLabels = array(); $requestData = array();
+    if(!empty($monthRequests)){
+        foreach($monthRequests as $req){ $requestLabels[] = $req->type_name; $requestData[] = $req->count; }
+    }
+
+    // --- Paneles de Acción y Comunidad ---
+    // AHORA LLAMAMOS AL NUEVO MÉTODO
+    $birthdayInfo = $this->userModel->getBirthdayInfo($companyId);
+    $latestSuggestion = $this->suggestionModel->getLatestSuggestionByCompany($companyId);
+
+    // CONSTRUIMOS EL ARRAY DE DATOS CON LA CLAVE CORRECTA
+    $data = array(
+        'stats' => array(
+            'active_users' => $activeUsers,
+            'working_now' => $workingNow,
+            'on_leave_today' => $onLeaveToday,
+            'pending_requests_count' => count($pendingRequests),
+            'overtime_50' => $overtime_50,
+            'overtime_100' => $overtime_100,
+            'employees_with_pending' => $employeesWithPending
+        ),
+        'charts' => array(
+            'overtime_distribution' => json_encode(array($overtime_50, $overtime_100)),
+            'overtime_by_day' => json_encode($overtimeByDay),
+            'requests' => array('labels' => json_encode($requestLabels), 'data' => json_encode($requestData))
+        ),
+        'top_employees' => $topEmployees,
+        'pending_requests' => $pendingRequests,
+        'birthday_info' => $birthdayInfo, // <-- ¡AQUÍ ESTÁ LA CLAVE CORRECTA!
+        'latest_suggestion' => $latestSuggestion
+    );
+
+    $this->view('admin/dashboard', $data);
+}
 
     
     public function employeeDetails($user_id = 0){
@@ -193,11 +195,12 @@ class AdminController {
     
     public function editUser($id){
         if($_SERVER['REQUEST_METHOD'] == 'POST'){
+            // 1. Sanitizar los datos de entrada
             $_POST = filter_input_array(INPUT_POST, FILTER_SANITIZE_STRING);
-            $user = $this->userModel->getUserById($id);
-
+            
+            // 2. Recolectar todos los datos del formulario en un array limpio
             $data = [
-                'id' => $id, 'user' => $user, 'errors' => [],
+                'id' => $id,
                 'full_name' => trim($_POST['full_name']),
                 'birth_date' => trim($_POST['birth_date']),
                 'address' => trim($_POST['address']),
@@ -210,18 +213,22 @@ class AdminController {
                 'company_id' => (int)$_POST['company_id'],
                 'health_insurance' => trim($_POST['health_insurance']),
                 'username' => trim($_POST['username']),
-                'password' => trim($_POST['password']),
-                'confirm_password' => trim($_POST['confirm_password']),
                 'role' => $_POST['role'],
                 'clock_id' => trim($_POST['clock_id']),
-                'weekly_hour_limit' => trim($_POST['weekly_hour_limit'])
+                'weekly_hour_limit' => trim($_POST['weekly_hour_limit']),
+                'password' => trim($_POST['password']),
+                'errors' => []
             ];
-            function handleUpload($file_input_name, $user_id, $prefix, $target_dir, $allowed_types){
+
+            // 3. Función auxiliar para manejar la subida de archivos de forma segura
+            function handleUpload($file_input_name, $user_id, $prefix, $target_dir){
                 if(isset($_FILES[$file_input_name]) && $_FILES[$file_input_name]['error'] == 0){
                     if (!file_exists($target_dir)) { mkdir($target_dir, 0755, true); }
+                    
                     $file_extension = strtolower(pathinfo($_FILES[$file_input_name]["name"], PATHINFO_EXTENSION));
                     $new_filename = $prefix . '_' . $user_id . '_' . time() . '.' . $file_extension;
                     $target_file = $target_dir . $new_filename;
+                    $allowed_types = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
                     
                     if(in_array($file_extension, $allowed_types)){
                         if(move_uploaded_file($_FILES[$file_input_name]["tmp_name"], $target_file)){
@@ -229,22 +236,39 @@ class AdminController {
                         }
                     }
                 }
-                return null;
+                return null; // Devuelve null si no hay archivo o hay un error
             }
             
-            $data['profile_picture_new_name'] = handleUpload('profile_picture', $id, 'avatar', 'uploads/avatars/', ['jpg', 'jpeg', 'png', 'gif']);
-            $data['dni_photo_front_new_name'] = handleUpload('dni_photo_front', $id, 'dni_front', 'uploads/documents/', ['jpg', 'jpeg', 'png', 'pdf']);
-            $data['dni_photo_back_new_name'] = handleUpload('dni_photo_back', $id, 'dni_back', 'uploads/documents/', ['jpg', 'jpeg', 'png', 'pdf']);
-            
-            if(empty($data['errors'])){
-                if(!empty($data['password'])){
-                    $data['password_hash'] = password_hash($data['password'], PASSWORD_DEFAULT);
+            // 4. Procesar los archivos subidos y añadir los nombres al array $data
+            $data['profile_picture'] = handleUpload('profile_picture', $id, 'avatar', 'uploads/avatars/');
+            $data['dni_photo_front'] = handleUpload('dni_photo_front', $id, 'dni_front', 'uploads/documents/');
+            $data['dni_photo_back'] = handleUpload('dni_photo_back', $id, 'dni_back', 'uploads/documents/');
+
+            // 5. Validar contraseña (si se ha introducido una nueva)
+            if(!empty($data['password'])){
+                if(strlen($data['password']) < 4){
+                    $data['errors']['password'] = 'La contraseña debe tener al menos 4 caracteres.';
                 }
+                if($data['password'] != trim($_POST['confirm_password'])){
+                    $data['errors']['confirm_password'] = 'Las contraseñas no coinciden.';
+                }
+            }
+
+            // 6. Si no hay errores, llamar al modelo para actualizar
+            if(empty($data['errors'])){
+                // Llamamos al método del modelo para actualizar.
+                // El modelo se encargará de la lógica de la base de datos.
                 if($this->userModel->updateUser($data)){
                     $_SESSION['flash_success'] = 'Ficha de empleado actualizada con éxito.';
                     redirect('admin/users');
+                } else {
+                    // Si el modelo devuelve false, algo salió mal
+                    $_SESSION['flash_error'] = 'Error: No se pudo actualizar la ficha del empleado.';
+                    redirect('admin/editUser/' . $id);
                 }
             } else {
+                // Si hay errores, volver a mostrar el formulario con los errores
+                $data['user'] = $this->userModel->getUserById($id);
                 $data['companies'] = $this->companyModel->getAllCompanies();
                 $this->view('admin/edit_user', $data);
             }

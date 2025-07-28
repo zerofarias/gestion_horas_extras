@@ -141,6 +141,70 @@ class Request {
         return $this->db->resultSet();
     }
 
+
+    public function getPendingRequestsWithDetails($companyId) {
+        $sql = "SELECT r.id, u.full_name, rt.name as type_name, r.start_date, r.end_date
+                FROM requests r
+                JOIN users u ON r.user_id = u.id
+                JOIN request_types rt ON r.request_type_id = rt.id
+                WHERE u.company_id = :company_id AND r.status = 'Pendiente'
+                ORDER BY r.start_date ASC";
+        $this->db->query($sql);
+        $this->db->bind(':company_id', $companyId);
+        return $this->db->resultSet();
+    }
+
+    public function getMonthlyRequestSummary($companyId, $month) {
+        // CORRECCIÓN: Se cambió 'GROUP BY rt.type_name' por 'GROUP BY rt.name'
+        $sql = "SELECT rt.name as type_name, COUNT(r.id) as count
+                FROM requests r
+                JOIN request_types rt ON r.request_type_id = rt.id
+                JOIN users u ON r.user_id = u.id
+                WHERE u.company_id = :company_id AND r.status = 'Aprobado' AND DATE_FORMAT(r.start_date, '%Y-%m') = :month
+                GROUP BY rt.name"; // <-- La corrección está aquí
+        $this->db->query($sql);
+        $this->db->bind(':company_id', $companyId);
+        $this->db->bind(':month', $month);
+        return $this->db->resultSet();
+    }
+
+    /**
+     * Obtiene las solicitudes aprobadas para el planificador.
+     */
+    public function getApprovedRequestsForPeriod($startDate, $endDate, $companyId) {
+        $sql = "SELECT 
+                    r.*, 
+                    u.full_name,
+                    rt.name as type_name,
+                    rt.color
+                FROM requests r
+                JOIN users u ON r.user_id = u.id
+                JOIN request_types rt ON r.request_type_id = rt.id
+                WHERE u.company_id = :company_id
+                AND r.status = 'Aprobado'
+                AND r.start_date <= :end_date 
+                AND r.end_date >= :start_date";
+
+        $this->db->query($sql);
+        $this->db->bind(':company_id', $companyId);
+        $this->db->bind(':start_date', $startDate);
+        $this->db->bind(':end_date', $endDate);
+        
+        return $this->db->resultSet();
+    }
+
+    public function countOnLeaveTodayByCompany($companyId) {
+    $sql = "SELECT COUNT(DISTINCT r.user_id) as count
+            FROM requests r
+            JOIN users u ON r.user_id = u.id
+            WHERE u.company_id = :company_id 
+            AND r.status = 'Aprobado'
+            AND CURDATE() BETWEEN r.start_date AND r.end_date";
+    $this->db->query($sql);
+    $this->db->bind(':company_id', $companyId);
+    $row = $this->db->single();
+    return $row ? $row->count : 0;
+}
     
 
 }

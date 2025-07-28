@@ -123,11 +123,24 @@
                                     <label class="form-label">ID de Reloj</label>
                                     <input type="text" name="clock_id" class="form-control" value="<?php echo isset($data['user']->clock_id) ? htmlspecialchars($data['user']->clock_id) : ''; ?>">
                                 </div>
+                                <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="role" class="form-label">Rol</label>
+                                    <select name="role" id="role" class="form-select">
+                                        <option value="empleado" <?php if($data['user']->role == 'empleado') echo 'selected'; ?>>Empleado</option>
+                                        <option value="admin" <?php if($data['user']->role == 'admin') echo 'selected'; ?>>Admin</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="weekly_hour_limit" class="form-label">Límite de Horas Semanales</label>
+                                    <input type="number" step="0.25" name="weekly_hour_limit" id="weekly_hour_limit" class="form-control" value="<?php echo htmlspecialchars($data['user']->weekly_hour_limit); ?>">
+                                    <small class="form-text text-muted">Horas a partir de las cuales se consideran extras (ej. 44).</small>
+                                </div>
                             </div>
                         </div>
                         <!-- Pestaña Documentos -->
                         <div class="tab-pane fade" id="documentos" role="tabpanel">
-                             <div class="row">
+                            <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Foto DNI (Frente)</label>
                                     <input type="file" name="dni_photo_front" class="form-control">

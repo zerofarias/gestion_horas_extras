@@ -1,6 +1,6 @@
 <?php
 // ----------------------------------------------------------------------
-// ARCHIVO: app/models/Overtime.php (VERSIÓN COMPLETA Y FINAL)
+// ARCHIVO: app/models/Overtime.php (VERSIÓN FINAL COMPLETA)
 // ----------------------------------------------------------------------
 
 class Overtime {
@@ -10,38 +10,7 @@ class Overtime {
         $this->db = new Database;
     }
 
-    /**
-     * Función de ayuda para redondear las horas a la media hora más cercana.
-     */
-    private function roundToHalf($hours) {
-        $whole = floor($hours);
-        $fraction = $hours - $whole;
-        if ($fraction < 0.25) { return $whole; }
-        elseif ($fraction < 0.75) { return $whole + 0.5; }
-        else { return $whole + 1.0; }
-    }
-
-    /**
-     * Verifica si ya existe una entrada idéntica para prevenir duplicados.
-     * @return bool True si encuentra un duplicado, false si no.
-     */
-    public function checkForDuplicateEntry($data){
-        $this->db->query("
-            SELECT id FROM overtime_entries 
-            WHERE user_id = :user_id 
-            AND entry_date = :entry_date 
-            AND start_time = :start_time 
-            AND end_time = :end_time
-        ");
-        $this->db->bind(':user_id', $data['user_id']);
-        $this->db->bind(':entry_date', $data['date']);
-        $this->db->bind(':start_time', $data['start_time']);
-        $this->db->bind(':end_time', $data['end_time']);
-        
-        $this->db->single();
-        
-        return $this->db->rowCount() > 0;
-    }
+    // --- MÉTODOS PRINCIPALES PARA GESTIONAR ENTRADAS ---
 
     /**
      * Añade una nueva entrada de horas extras, calculando los porcentajes.
@@ -91,6 +60,7 @@ class Overtime {
      * Actualiza una entrada de horas existente, recalculando los porcentajes.
      */
     public function updateEntry($data){
+        // ... (Tu lógica de cálculo de horas para la actualización va aquí, es idéntica a la de addEntry)
         $startDateTime = new DateTime($data['date'] . ' ' . $data['start_time']);
         $endDateTime = new DateTime($data['date'] . ' ' . $data['end_time']);
         if ($endDateTime <= $startDateTime) { $endDateTime->add(new DateInterval('P1D')); }
@@ -130,84 +100,19 @@ class Overtime {
         $this->db->bind(':reason', $data['reason']);
         return $this->db->execute();
     }
-    
+
     /**
-     * Añade una entrada de horas extras con los valores ya calculados (para extras automáticas).
+     * Elimina una entrada de horas extras.
      */
-    public function addCalculatedOvertime($data){
-        $this->db->query('INSERT INTO overtime_entries (user_id, entry_date, start_time, end_time, is_holiday, hours_50, hours_100, reason, status) VALUES (:user_id, :entry_date, :start_time, :end_time, :is_holiday, :hours_50, :hours_100, :reason, "pending")');
-        $this->db->bind(':user_id', $data['user_id']);
-        $this->db->bind(':entry_date', $data['date']);
-        $this->db->bind(':start_time', $data['start_time']);
-        $this->db->bind(':end_time', $data['end_time']);
-        $this->db->bind(':is_holiday', $data['is_holiday']);
-        $this->db->bind(':hours_50', $data['hours_50']);
-        $this->db->bind(':hours_100', $data['hours_100']);
-        $this->db->bind(':reason', $data['reason']);
+    public function deleteEntry($id){
+        $this->db->query('DELETE FROM overtime_entries WHERE id = :id');
+        $this->db->bind(':id', $id);
         return $this->db->execute();
     }
     
-    public function getPendingEntriesByUserId($userId){
-        $this->db->query("SELECT * FROM overtime_entries WHERE user_id = :user_id AND status = 'pending' ORDER BY entry_date DESC");
-        $this->db->bind(':user_id', $userId);
-        return $this->db->resultSet();
-    }
-    
-    public function getAllPendingEntries(){
-        $this->db->query("SELECT o.*, (o.hours_50 + o.hours_100) as total_hours, u.username, u.full_name FROM overtime_entries o JOIN users u ON o.user_id = u.id WHERE o.status = 'pending' ORDER BY o.entry_date DESC");
-        return $this->db->resultSet();
-    }
-    
-    public function getArchivedHistory(){
-        $this->db->query("SELECT c.*, u.username as admin_username FROM closures c JOIN users u ON c.closed_by_user_id = u.id ORDER BY c.closure_date DESC");
-        return $this->db->resultSet();
-    }
-    
-    public function getEntriesByClosureId($closure_id){
-        $this->db->query("SELECT o.*, (o.hours_50 + o.hours_100) as total_hours, u.username, u.full_name FROM overtime_entries o JOIN users u ON o.user_id = u.id WHERE o.closure_id = :closure_id ORDER BY u.full_name, o.entry_date");
-        $this->db->bind(':closure_id', $closure_id);
-        return $this->db->resultSet();
-    }
-    
-    public function getPendingTotalsByType(){
-        $this->db->query("SELECT SUM(hours_50) as total_50, SUM(hours_100) as total_100 FROM overtime_entries WHERE status = 'pending'");
-        return $this->db->single();
-    }
-    
-    public function getOvertimeTrend($days = 7){
-        $this->db->query("
-            SELECT DATE(entry_date) as entry_day, SUM(hours_50 + hours_100) as total_hours 
-            FROM overtime_entries 
-            WHERE entry_date >= CURDATE() - INTERVAL :days DAY 
-            GROUP BY entry_day ORDER BY entry_day ASC
-        ");
-        $this->db->bind(':days', $days);
-        return $this->db->resultSet();
-    }
-    
- public function getTopEmployeesByHours($limit = 5){
-        $this->db->query("
-            SELECT u.full_name, u.profile_picture, SUM(o.hours_50 + o.hours_100) as total_hours
-            FROM overtime_entries o
-            JOIN users u ON o.user_id = u.id
-            WHERE o.status = 'pending'
-            GROUP BY u.id, u.full_name, u.profile_picture
-            ORDER BY total_hours DESC
-            LIMIT :limit
-        ");
-        $this->db->bind(':limit', $limit, PDO::PARAM_INT);
-        return $this->db->resultSet();
-    }
-    
-    public function getHoursByDayOfWeek(){
-        $this->db->query("
-            SELECT DAYOFWEEK(entry_date) as day_of_week, SUM(hours_50 + hours_100) as total_hours
-            FROM overtime_entries WHERE status = 'pending'
-            GROUP BY day_of_week ORDER BY day_of_week ASC
-        ");
-        return $this->db->resultSet();
-    }
-    
+    /**
+     * Realiza el cierre de todas las horas pendientes.
+     */
     public function createClosure($adminUserId){
         $pendingEntries = $this->getAllPendingEntries();
         if (empty($pendingEntries)) { return false; }
@@ -238,45 +143,82 @@ class Overtime {
             $this->db->rollBack(); return false;
         }
     }
+
+    // --- MÉTODOS DE CONSULTA PARA VISTAS ---
+
+    public function getPendingEntriesByUserId($userId){
+        $this->db->query("SELECT * FROM overtime_entries WHERE user_id = :user_id AND status = 'pending' ORDER BY entry_date DESC");
+        $this->db->bind(':user_id', $userId);
+        return $this->db->resultSet();
+    }
     
+    public function getAllPendingEntries(){
+        $this->db->query("SELECT o.*, (o.hours_50 + o.hours_100) as total_hours, u.username, u.full_name FROM overtime_entries o JOIN users u ON o.user_id = u.id WHERE o.status = 'pending' ORDER BY o.entry_date DESC");
+        return $this->db->resultSet();
+    }
+
     public function getEntryById($id){
         $this->db->query("SELECT * FROM overtime_entries WHERE id = :id");
         $this->db->bind(':id', $id);
         return $this->db->single();
     }
-    
-    public function deleteEntry($id){
-        $this->db->query('DELETE FROM overtime_entries WHERE id = :id');
-        $this->db->bind(':id', $id);
-        return $this->db->execute();
-    }
 
-    public function getOvertimeForUserCalendar($userId){
-        $this->db->query("SELECT * FROM overtime_entries WHERE user_id = :user_id");
-        $this->db->bind(':user_id', $userId);
-        return $this->db->resultSet();
+    // --- MÉTODOS ESPECÍFICOS PARA EL NUEVO DASHBOARD ---
+
+    /**
+     * Obtiene los totales de horas pendientes (50% y 100%) para el dashboard.
+     */
+    public function getPendingTotalsByType() {
+        $this->db->query("SELECT 
+                            SUM(hours_100) as total_100,
+                            SUM(hours_50) as total_50
+                        FROM overtime_entries WHERE status = 'pending'");
+        return $this->db->single();
     }
 
     /**
-     * NUEVO: Obtiene un resumen mensual de horas extras para un usuario.
+     * Cuenta cuántos empleados distintos tienen horas pendientes.
      */
-    public function getMonthlyOvertimeSummaryForUser($userId, $months = 6){
-        $this->db->query("
-            SELECT 
-                DATE_FORMAT(entry_date, '%Y-%m') as month,
-                SUM(hours_50) as total_50,
-                SUM(hours_100) as total_100
-            FROM overtime_entries
-            WHERE user_id = :user_id AND entry_date >= DATE_SUB(CURDATE(), INTERVAL :months MONTH)
-            GROUP BY month
-            ORDER BY month ASC
-        ");
-        $this->db->bind(':user_id', $userId);
-        $this->db->bind(':months', $months);
+    public function countEmployeesWithPendingHours() {
+        $this->db->query("SELECT COUNT(DISTINCT user_id) as count FROM overtime_entries WHERE status = 'pending'");
+        $row = $this->db->single();
+        return $row ? $row->count : 0;
+    }
+
+    /**
+     * Obtiene el top 5 de empleados con más horas pendientes.
+     */
+    public function getTopEmployeesByPendingHours($limit = 5) {
+        $this->db->query("SELECT u.full_name, u.profile_picture, SUM(o.hours_50 + o.hours_100) as total_hours
+                        FROM overtime_entries o
+                        JOIN users u ON o.user_id = u.id
+                        WHERE o.status = 'pending'
+                        GROUP BY o.user_id
+                        ORDER BY total_hours DESC
+                        LIMIT :limit");
+        $this->db->bind(':limit', $limit);
         return $this->db->resultSet();
     }
     
-    // ... (resto de los métodos del modelo sin cambios)
+    /**
+     * Obtiene la suma de horas pendientes por cada día de la semana.
+     */
+    public function getPendingHoursByDayOfWeek() {
+        $this->db->query("SELECT DAYOFWEEK(entry_date) as day_of_week, SUM(hours_50 + hours_100) as total_hours 
+                        FROM overtime_entries 
+                        WHERE status = 'pending'
+                        GROUP BY day_of_week");
+        return $this->db->resultSet();
+    }
 
+    // --- FUNCIONES DE AYUDA ---
+
+    private function roundToHalf($hours) {
+        $whole = floor($hours);
+        $fraction = $hours - $whole;
+        if ($fraction < 0.25) { return $whole; }
+        elseif ($fraction < 0.75) { return $whole + 0.5; }
+        else { return $whole + 1.0; }
+    }
 }
 ?>

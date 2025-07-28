@@ -7,7 +7,6 @@ class AdminController {
     private $userModel;
     private $overtimeModel;
     private $requestModel;
-    private $workScheduleModel;
     private $scheduleModel;
     private $companyModel;
 
@@ -15,7 +14,15 @@ class AdminController {
 
     private $userNoteModel;
 
-    private $shiftModel;
+     private $shiftModel;
+
+    private $workScheduleModel; 
+
+    private $holidayModel;
+
+    private $templateModel;
+
+    
 
     public function __construct(){
         if(!hasRole('admin')){ 
@@ -30,6 +37,9 @@ class AdminController {
         $this->suggestionModel = new Suggestion();
         $this->userNoteModel = new UserNote();
         $this->shiftModel = new Shift();
+        $this->workScheduleModel = new WorkSchedule();
+        $this->holidayModel = new Holiday();
+        $this->templateModel = new Template();
     }
 
     public function index(){
@@ -43,103 +53,72 @@ class AdminController {
     // --- Métodos del Dashboard e Historial ---
 
     public function dashboard(){
-        // Obtiene todas las horas extras pendientes
-        $allEntries = $this->overtimeModel->getAllPendingEntries();
-        $totalHours = 0;
-        $hoursByEmployeeChart = [];
-        $employeeSummary = [];
+        if (!isset($_SESSION['user_company_id'])) {
+            $adminUser = $this->userModel->getUserById($_SESSION['user_id']);
+            $_SESSION['user_company_id'] = $adminUser->company_id;
+        }
+        $companyId = $_SESSION['user_company_id'];
+        
+        // --- KPIs ---
+        $activeUsers = $this->userModel->countActiveUsersByCompany($companyId);
+        $workingNow = $this->workScheduleModel->countWorkingNowByCompany($companyId);
+        $onLeaveToday = $this->requestModel->countOnLeaveTodayByCompany($companyId);
+        $pendingRequests = $this->requestModel->getPendingRequestsWithDetails($companyId);
+        $pendingOvertimeTotals = $this->overtimeModel->getPendingTotalsByType();
+        $employeesWithPending = $this->overtimeModel->countEmployeesWithPendingHours();
 
-        // Procesa las entradas para agrupar datos
-        foreach($allEntries as $entry){
-            $totalHours += $entry->total_hours;
-            $employeeName = !empty($entry->full_name) ? $entry->full_name : $entry->username;
-            if(!isset($hoursByEmployeeChart[$employeeName])){ $hoursByEmployeeChart[$employeeName] = 0; }
-            $hoursByEmployeeChart[$employeeName] += $entry->total_hours;
-            $userId = $entry->user_id;
-            if(!isset($employeeSummary[$userId])){
-                $employeeSummary[$userId] = [
-                    'full_name' => $employeeName,
-                    'hours_50' => 0,
-                    'hours_100' => 0,
-                    'holidays' => 0
-                ];
+        // --- Gráficos ---
+        $weekSchedule = $this->workScheduleModel->getDashboardScheduleSummary($companyId, date('Y-m-d', strtotime('monday this week')), date('Y-m-d', strtotime('sunday this week')));
+        $workloadByDay = array_fill(0, 7, 0);
+        foreach($weekSchedule as $entry){ 
+            $hours = 0;
+            if($entry->start_time && $entry->end_time){
+                $start = strtotime($entry->start_time);
+                $end = strtotime($entry->end_time);
+                if($end < $start) { $end += 24 * 3600; }
+                $hours = ($end - $start) / 3600;
             }
-            $employeeSummary[$userId]['hours_50'] += $entry->hours_50;
-            $employeeSummary[$userId]['hours_100'] += $entry->hours_100;
-            if($entry->is_holiday){
-                $employeeSummary[$userId]['holidays']++;
-            }
+            $dayIndex = date('N', strtotime($entry->schedule_date)) - 1;
+            $workloadByDay[$dayIndex] += $hours;
         }
         
-        // Obtiene datos para el gráfico de torta (50% vs 100%)
-        $pendingTotals = $this->overtimeModel->getPendingTotalsByType();
-        $pieChartData = [
-            'total_50' => isset($pendingTotals->total_50) ? $pendingTotals->total_50 : 0,
-            'total_100' => isset($pendingTotals->total_100) ? $pendingTotals->total_100 : 0
-        ];
+        $topEmployees = $this->overtimeModel->getTopEmployeesByPendingHours(5);
+        $monthRequests = $this->requestModel->getMonthlyRequestSummary($companyId, date('Y-m'));
+        $requestLabels = array(); 
+        $requestData = array();
+        foreach($monthRequests as $req){ $requestLabels[] = $req->type_name; $requestData[] = $req->count; }
 
-        // Obtiene datos para el gráfico de tendencia (últimos 7 días)
-        $trendData = $this->overtimeModel->getOvertimeTrend(7);
-        $lineLabels = []; $lineDataPoints = [];
-        foreach($trendData as $day) {
-            $lineLabels[] = date('d/m', strtotime($day->entry_day));
-            $lineDataPoints[] = $day->total_hours;
-        }
+        // --- Paneles de Acción y Comunidad ---
+        $upcomingBirthdays = $this->userModel->getUpcomingBirthdays($companyId, 7);
+        $latestSuggestion = $this->suggestionModel->getLatestSuggestionByCompany($companyId);
 
-        // Obtiene datos para el gráfico de Top 5 Empleados (con fotos)
-        $topEmployees = $this->overtimeModel->getTopEmployeesByHours(5);
-        $topEmployeesLabels = []; 
-        $topEmployeesData = [];
-        $topEmployeesPictures = [];
-        foreach($topEmployees as $employee) {
-            $topEmployeesLabels[] = $employee->full_name;
-            $topEmployeesData[] = $employee->total_hours;
-            $topEmployeesPictures[] = URLROOT . '/uploads/avatars/' . (isset($employee->profile_picture) ? $employee->profile_picture : 'default.png');
-        }
-        $topEmployeesChartData = ['labels' => $topEmployeesLabels, 'data' => $topEmployeesData, 'pictures' => $topEmployeesPictures];
-        
-        // Obtiene datos para el gráfico de Horas por Día de la Semana
-        $hoursByDayRaw = $this->overtimeModel->getHoursByDayOfWeek();
-        $daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-        $hoursByDayData = array_fill(0, 7, 0);
-        foreach($hoursByDayRaw as $day) {
-            $hoursByDayData[$day->day_of_week - 1] = $day->total_hours;
-        }
-        
-        // Formatea la fecha actual
-        $meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-        $mesActual = $meses[date('n') - 1]; $anoActual = date('Y');
-        $fechaFormateada = $mesActual . ' de ' . $anoActual;
-        
-        // Empaqueta todos los datos para pasarlos a la vista
-        $data = [
-            'entries' => $allEntries,
-            'stats' => [ 
-                'total_hours' => $totalHours, 
-                'employee_count' => count($hoursByEmployeeChart),
-                'totals_by_type' => $pieChartData
-            ],
-            'employee_summary' => $employeeSummary,
-            'bar_chart_data' => json_encode(['labels' => array_keys($hoursByEmployeeChart), 'data' => array_values($hoursByEmployeeChart)]),
-            'pie_chart_data' => json_encode(array_values($pieChartData)),
-            'line_chart_data' => json_encode(['labels' => $lineLabels, 'data' => $lineDataPoints]),
-            'top_employees_chart_data' => json_encode($topEmployeesChartData),
-            'hours_by_day_chart_data' => json_encode(['labels' => $daysOfWeek, 'data' => $hoursByDayData]),
-            'success_message' => ''
-        ];
+        // CORRECCIÓN PARA PHP 5.6: Reemplazar el operador ??
+        $overtime_50 = isset($pendingOvertimeTotals->total_50) ? $pendingOvertimeTotals->total_50 : 0;
+        $overtime_100 = isset($pendingOvertimeTotals->total_100) ? $pendingOvertimeTotals->total_100 : 0;
 
-        // Maneja los mensajes flash de éxito
-        if(isset($_SESSION['flash_success'])){
-            $data['success_message'] = $_SESSION['flash_success'];
-            unset($_SESSION['flash_success']);
-        }
+        $data = array(
+            'stats' => array(
+                'active_users' => $activeUsers,
+                'working_now' => $workingNow,
+                'on_leave_today' => $onLeaveToday,
+                'pending_requests_count' => count($pendingRequests),
+                'overtime_50' => $overtime_50,
+                'overtime_100' => $overtime_100,
+                'employees_with_pending' => $employeesWithPending
+            ),
+            'charts' => array(
+                'overtime_distribution' => json_encode(array($overtime_50, $overtime_100)),
+                'workload' => json_encode($workloadByDay),
+                'requests' => array('labels' => json_encode($requestLabels), 'data' => json_encode($requestData))
+            ),
+            'top_employees' => $topEmployees,
+            'pending_requests' => $pendingRequests,
+            'upcoming_birthdays' => $upcomingBirthdays,
+            'latest_suggestion' => $latestSuggestion
+        );
 
-        // Carga la vista del dashboard
         $this->view('admin/dashboard', $data);
     }
-    
-    // ... (el resto de las funciones del controlador)
-
 
     
     public function employeeDetails($user_id = 0){
@@ -241,7 +220,8 @@ class AdminController {
                 'password' => trim($_POST['password']),
                 'confirm_password' => trim($_POST['confirm_password']),
                 'role' => $_POST['role'],
-                'clock_id' => trim($_POST['clock_id'])
+                'clock_id' => trim($_POST['clock_id']),
+                'weekly_hour_limit' => trim($_POST['weekly_hour_limit'])
             ];
             function handleUpload($file_input_name, $user_id, $prefix, $target_dir, $allowed_types){
                 if(isset($_FILES[$file_input_name]) && $_FILES[$file_input_name]['error'] == 0){
@@ -333,48 +313,55 @@ class AdminController {
     // --- Métodos de Gestión de Solicitudes ---
 
     public function requests(){
-        $allRequests = $this->requestModel->getAllRequests();
+        $allRequests = $this->requestModel->getAllRequests(); // Asume que este método ya existe y funciona
         
-        $calendarEvents = [];
+        $calendarEvents = array();
         foreach($allRequests as $request){
-            $className = '';
-            if ($request->status == 'Aprobado') $className = 'fc-event-success';
-            if ($request->status == 'Rechazado') $className = 'fc-event-danger';
+            // Asigna un color según el estado de la solicitud
+            $color = '#6c757d'; // Gris por defecto para 'Pendiente'
+            if ($request->status == 'Aprobado') $color = '#198754'; // Verde
+            if ($request->status == 'Rechazado') $color = '#dc3545'; // Rojo
 
-            $calendarEvents[] = [
+            $calendarEvents[] = array(
                 'title' => $request->full_name . ' - ' . $request->type_name,
                 'start' => $request->start_date,
+                // FullCalendar necesita que la fecha final sea exclusiva, por eso se añade 1 día
                 'end' => $request->end_date ? date('Y-m-d', strtotime($request->end_date . ' +1 day')) : null,
-                'color' => $request->color,
-                'className' => $className,
-                'extendedProps' => [
-                    'reason' => $request->reason,
-                    'status' => $request->status,
-                    'id' => $request->id
-                ]
-            ];
+                'color' => $color
+            );
         }
 
-        $data = [
+        $data = array(
             'requests' => $allRequests,
             'calendarEvents' => json_encode($calendarEvents)
-        ];
+        );
         $this->view('admin/requests', $data);
     }
-    
+
+    /**
+     * Procesa la aprobación de una solicitud.
+     */
     public function approveRequest($id){
         if($this->requestModel->updateRequestStatus($id, 'Aprobado')){
             $_SESSION['flash_success'] = 'Solicitud aprobada con éxito.';
+        } else {
+            $_SESSION['flash_error'] = 'Error al aprobar la solicitud.';
         }
         redirect('admin/requests');
     }
 
+    /**
+     * Procesa el rechazo de una solicitud.
+     */
     public function rejectRequest($id){
         if($this->requestModel->updateRequestStatus($id, 'Rechazado')){
             $_SESSION['flash_success'] = 'Solicitud rechazada.';
+        } else {
+            $_SESSION['flash_error'] = 'Error al rechazar la solicitud.';
         }
         redirect('admin/requests');
     }
+
 
     public function editRequest($id){
         if($_SERVER['REQUEST_METHOD'] == 'POST'){
@@ -404,47 +391,7 @@ class AdminController {
     
     // --- Métodos de Planificación de Horarios ---
 
-    public function schedules(){
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            $schedules = $_POST['schedules'];
-            $year = $_POST['year'];
-            $week_number = $_POST['week_number'];
-
-            foreach ($schedules as $user_id => $days) {
-                $data = [
-                    'user_id' => $user_id,
-                    'year' => $year,
-                    'week_number' => $week_number,
-                    'monday' => trim($days['monday']),
-                    'tuesday' => trim($days['tuesday']),
-                    'wednesday' => trim($days['wednesday']),
-                    'thursday' => trim($days['thursday']),
-                    'friday' => trim($days['friday']),
-                    'saturday' => trim($days['saturday']),
-                    'sunday' => trim($days['sunday'])
-                ];
-                $this->workScheduleModel->upsertSchedule($data);
-            }
-            $_SESSION['flash_success'] = 'Horarios guardados con éxito para la semana ' . $week_number . '.';
-            redirect('admin/schedules?week=' . $year . '-W' . $week_number);
-
-        } else {
-            $current_week = isset($_GET['week']) ? $_GET['week'] : date('Y-\WW');
-            list($year, $week_number) = sscanf($current_week, '%d-W%d');
-
-            $users = $this->userModel->getAllUsers();
-            $schedules = $this->workScheduleModel->getSchedulesForWeek($year, $week_number);
-
-            $data = [
-                'users' => $users,
-                'schedules' => $schedules,
-                'year' => $year,
-                'week_number' => $week_number,
-                'current_week_input' => $current_week
-            ];
-            $this->view('admin/schedules', $data);
-        }
-    }
+    
 
     public function clockingsReport(){
         $filters = [
@@ -774,48 +721,422 @@ class AdminController {
         }
     }
 
-    public function shiftManager(){
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            // Lógica para crear un nuevo turno
-            $data = [
-                'company_id' => $_SESSION['user_company_id'], // Asumimos que esto se guarda en la sesión
-                'shift_name' => trim($_POST['shift_name']),
-                'start_time' => trim($_POST['start_time']),
-                'end_time' => trim($_POST['end_time'])
-            ];
-            $this->shiftModel->createShift($data);
-            $_SESSION['flash_success'] = 'Turno creado con éxito.';
-            redirect('admin/shiftManager');
-        } else {
-            $adminUser = $this->userModel->getUserById($_SESSION['user_id']);
-            $_SESSION['user_company_id'] = $adminUser->company_id;
-
-            $shifts = $this->shiftModel->getShiftsByCompany($_SESSION['user_company_id']);
-            $this->view('admin/shift_manager', ['shifts' => $shifts]);
+  public function shiftManager(){
+        $adminUser = $this->userModel->getUserById($_SESSION['user_id']);
+        if (!isset($_SESSION['user_company_id'])) {
+             $_SESSION['user_company_id'] = $adminUser->company_id;
         }
+        $shifts = $this->shiftModel->getShiftsWithRangesByCompany($_SESSION['user_company_id']);
+        $data = array('shifts' => $shifts);
+        $this->view('admin/shift_manager', $data);
     }
     
-    /**
-     * NUEVO: Elimina un turno predefinido.
-     */
-    public function deleteShift($id){
+   public function createSplitShift(){
+        if($_SERVER['REQUEST_METHOD'] == 'POST'){
+            
+            unset($_SESSION['db_error_details']);
+
+            // Leemos todos los datos del formulario, incluyendo el color
+            $shift_name = isset($_POST['shift_name']) ? trim($_POST['shift_name']) : '';
+            $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
+            $ranges = isset($_POST['ranges']) && is_array($_POST['ranges']) ? $_POST['ranges'] : array();
+            // Esta es la línea clave que lee el color del formulario
+            $color = isset($_POST['color']) ? $_POST['color'] : '#3788d8';
+
+            // Creamos el array de datos para el modelo
+            $data = array(
+                'company_id' => $_SESSION['user_company_id'],
+                'shift_name' => $shift_name,
+                'notes' => $notes,
+                'ranges' => $ranges,
+                'color' => $color // Pasamos el color al modelo
+            );
+
+            // ... (El resto del método no cambia)
+            
+            if($this->shiftModel->createShiftWithRanges($data)){
+                $_SESSION['flash_success'] = 'Turno partido creado con éxito.';
+            } else {
+                $error_details = isset($_SESSION['db_error_details']) ? $_SESSION['db_error_details'] : 'Error desconocido en la base de datos.';
+                $_SESSION['flash_error'] = '<strong>No se pudo crear el turno.</strong><br>Detalles: ' . $error_details;
+                unset($_SESSION['db_error_details']);
+            }
+            
+            redirect('admin/shiftManager');
+
+        } else {
+            redirect('admin/shiftManager');
+        }
+    }
+     public function weeklyPlanner(){
+        if($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($_POST['is_ajax'])){
+            $schedules = $_POST['schedules'];
+            foreach($schedules as $userId => $days){
+                foreach($days as $date => $entries){
+                    $this->workScheduleModel->saveDaySchedule($userId, $date, !empty($entries) ? $entries : array());
+                }
+            }
+            $_SESSION['flash_success'] = 'Planificador guardado con éxito.';
+            redirect('admin/weeklyPlanner?week=' . $_POST['current_week']);
+        }
+
+        // --- Lógica GET para mostrar la página ---
+
+        if (!isset($_SESSION['user_company_id'])) {
+            $adminUser = $this->userModel->getUserById($_SESSION['user_id']);
+            $_SESSION['user_company_id'] = $adminUser->company_id;
+        }
+
+        // 1. Obtener fechas
+        $current_week_string = isset($_GET['week']) ? $_GET['week'] : date('Y-\WW');
+        $year = date('Y', strtotime($current_week_string));
+        $week = date('W', strtotime($current_week_string));
+        
+        $dias_semana = array('Mon' => 'Lun', 'Tue' => 'Mar', 'Wed' => 'Mié', 'Thu' => 'Jue', 'Fri' => 'Vie', 'Sat' => 'Sáb', 'Sun' => 'Dom');
+        $nombres_mes = array(1=>'Ene', 2=>'Feb', 3=>'Mar', 4=>'Abr', 5=>'May', 6=>'Jun', 7=>'Jul', 8=>'Ago', 9=>'Sep', 10=>'Oct', 11=>'Nov', 12=>'Dic');
+        
+        $week_dates = array();
+        for ($i = 0; $i < 7; $i++) {
+            $date_string = date('Y-m-d', strtotime($year . "W" . $week . ($i + 1)));
+            $week_dates[] = array('full_date' => $date_string, 'display' => $dias_semana[date('D', strtotime($date_string))] . ' ' . date('d/m', strtotime($date_string)));
+        }
+        
+        $weekStartDate = $week_dates[0]['full_date'];
+        $weekEndDate = end($week_dates)['full_date'];
+        
+        // 2. Obtener datos de la BD
+        $users = $this->userModel->getUsersByCompany($_SESSION['user_company_id']);
+        $shifts = $this->shiftModel->getShiftsWithRangesByCompany($_SESSION['user_company_id']);
+        $holidaysData = $this->holidayModel->getHolidaysForPeriod($_SESSION['user_company_id'], $weekStartDate, $weekEndDate);
+        $requestsData = $this->requestModel->getApprovedRequestsForPeriod($weekStartDate, $weekEndDate, $_SESSION['user_company_id']);
+        
+        $month1_start = date('Y-m-01', strtotime($weekStartDate));
+        $month1_end = date('Y-m-t', strtotime($weekStartDate));
+        $allEntries = $this->workScheduleModel->getScheduleEntriesForPeriod($_SESSION['user_company_id'], $month1_start, $month1_end);
+
+        $month2_start = date('Y-m-01', strtotime($weekEndDate));
+        if ($month1_start != $month2_start) {
+            $month2_end = date('Y-m-t', strtotime($weekEndDate));
+            $month2_entries = $this->workScheduleModel->getScheduleEntriesForPeriod($_SESSION['user_company_id'], $month2_start, $month2_end);
+            $allEntries = array_merge($allEntries, $month2_entries);
+        }
+
+        // 3. Procesar y calcular totales
+        $holidays = array();
+        foreach($holidaysData as $h) { $holidays[$h->holiday_date] = true; }
+
+        $requests = array();
+        foreach($requestsData as $req) {
+            $current_date = new DateTime($req->start_date);
+            $end_date = new DateTime($req->end_date);
+            while($current_date <= $end_date) {
+                $requests[$req->user_id][$current_date->format('Y-m-d')] = $req;
+                $current_date->modify('+1 day');
+            }
+        }
+
+        $schedules = array(); // <-- INICIALIZACIÓN DE LA VARIABLE
+        $weekly_totals = array();
+        $monthly_totals = array();
+        $shiftsById = array();
+        foreach($shifts as $s){ $shiftsById[$s->id] = $s; }
+
+        $month1_num = (int)date('m', strtotime($weekStartDate));
+        $month2_num = (int)date('m', strtotime($weekEndDate));
+        foreach($users as $user) {
+            $weekly_totals[$user->id] = 0;
+            $monthly_totals[$user->id][$month1_num] = 0;
+            if ($month1_num != $month2_num) {
+                $monthly_totals[$user->id][$month2_num] = 0;
+            }
+        }
+
+        foreach ($allEntries as $entry) {
+            if (!isset($schedules[$entry->user_id][$entry->schedule_date])) {
+                $schedules[$entry->user_id][$entry->schedule_date] = array();
+            }
+            $schedules[$entry->user_id][$entry->schedule_date][] = $entry; // <-- POBLACIÓN DE LA VARIABLE
+
+            $hours = 0;
+            if ($entry->type == 'shift' && !empty($entry->shift_id) && isset($shiftsById[$entry->shift_id])) {
+                $hours = $shiftsById[$entry->shift_id]->total_hours;
+            } elseif (($entry->type == 'custom' || $entry->type == 'overtime') && !empty($entry->start_time) && !empty($entry->end_time)) {
+                $start = strtotime($entry->start_time); $end = strtotime($entry->end_time);
+                if ($end < $start) { $end += 24 * 3600; }
+                $hours = ($end - $start) / 3600;
+            }
+
+            $entry_month = (int)date('m', strtotime($entry->schedule_date));
+            if (isset($monthly_totals[$entry->user_id][$entry_month])) {
+                $monthly_totals[$entry->user_id][$entry_month] += $hours;
+            }
+            if ($entry->schedule_date >= $weekStartDate && $entry->schedule_date <= $weekEndDate) {
+                if (isset($weekly_totals[$entry->user_id])) {
+                    $weekly_totals[$entry->user_id] += $hours;
+                }
+            }
+        }
+
+        $data = array(
+            'users' => $users, 'shifts' => $shifts, 'week_dates' => $week_dates,
+            'schedules' => $schedules, 'weekly_totals' => $weekly_totals, 'monthly_totals' => $monthly_totals, 
+            'holidays' => $holidays, 'requests' => $requests,
+            'nombres_mes' => $nombres_mes, 'month1_num' => $month1_num, 'month2_num' => $month2_num,
+            'current_week_string' => $current_week_string,
+            'prev_week_string' => date('Y-\WW', strtotime($current_week_string . ' -1 week')),
+            'next_week_string' => date('Y-\WW', strtotime($current_week_string . ' +1 week'))
+            
+        );
+        $templates = $this->templateModel->getTemplatesByCompany($_SESSION['user_company_id']);
+        $data['templates'] = $templates; 
+        $this->view('admin/weekly_planner', $data);
+    }
+
+    public function saveDayAjax(){
+        header('Content-Type: application/json');
+        
+        if($_SERVER['REQUEST_METHOD'] == 'POST'){
+            $userId = $_POST['user_id'];
+            $date = $_POST['date'];
+            $entries = isset($_POST['schedules'][$userId][$date]) ? $_POST['schedules'][$userId][$date] : array();
+
+            if($this->workScheduleModel->saveDaySchedule($userId, $date, $entries)){
+                // Recalcular totales actualizados para este usuario
+                $weekStartDate = date('Y-m-d', strtotime(date('Y', strtotime($date)) . "W" . date('W', strtotime($date)) . 1));
+                $weekEndDate = date('Y-m-d', strtotime($weekStartDate . ' +6 days'));
+                
+                // Obtener datos para todos los meses que toca la semana actual
+                $month1_start = date('Y-m-01', strtotime($weekStartDate));
+                $month1_end = date('Y-m-t', strtotime($weekStartDate));
+                $allEntries = $this->workScheduleModel->getScheduleEntriesForPeriod($_SESSION['user_company_id'], $month1_start, $month1_end);
+
+                $month2_start = date('Y-m-01', strtotime($weekEndDate));
+                if ($month1_start != $month2_start) {
+                    $month2_end = date('Y-m-t', strtotime($weekEndDate));
+                    $month2_entries = $this->workScheduleModel->getScheduleEntriesForPeriod($_SESSION['user_company_id'], $month2_start, $month2_end);
+                    $allEntries = array_merge($allEntries, $month2_entries);
+                }
+
+                $shifts = $this->shiftModel->getShiftsWithRangesByCompany($_SESSION['user_company_id']);
+                $shiftsById = array();
+                foreach($shifts as $s){ $shiftsById[$s->id] = $s; }
+
+                $weekly_total = 0;
+                $monthly_totals = array(); // <-- Será un objeto/array
+
+                foreach($allEntries as $entry){
+                    if($entry->user_id != $userId) continue;
+                    
+                    $hours = 0;
+                    if ($entry->type == 'shift' && isset($shiftsById[$entry->shift_id])) {
+                        $hours = $shiftsById[$entry->shift_id]->total_hours;
+                    } elseif (($entry->type == 'custom' || $entry->type == 'overtime') && !empty($entry->start_time)) {
+                        $start = strtotime($entry->start_time); $end = strtotime($entry->end_time);
+                        if ($end < $start) { $end += 24 * 3600; }
+                        $hours = ($end - $start) / 3600;
+                    }
+                    
+                    $entry_month = (int)date('m', strtotime($entry->schedule_date));
+                    if (!isset($monthly_totals[$entry_month])) {
+                        $monthly_totals[$entry_month] = 0;
+                    }
+                    $monthly_totals[$entry_month] += $hours;
+
+                    if ($entry->schedule_date >= $weekStartDate && $entry->schedule_date <= $weekEndDate) {
+                        $weekly_total += $hours;
+                    }
+                }
+                
+                echo json_encode(array(
+                    'success' => true, 
+                    'weekly_total' => $weekly_total, 
+                    'monthly_totals' => $monthly_totals // <-- Devuelve el objeto completo
+                ));
+            } else {
+                echo json_encode(array('success' => false, 'message' => 'Error al guardar en la base de datos.'));
+            }
+        } else {
+            echo json_encode(array('success' => false, 'message' => 'Método no permitido.'));
+        }
+    }
+
+
+     public function deleteShift($id){
         $this->shiftModel->deleteShift($id);
         $_SESSION['flash_success'] = 'Turno eliminado con éxito.';
         redirect('admin/shiftManager');
     }
 
-    /**
-     * ACTUALIZADO: El planificador mensual ahora también carga los turnos predefinidos.
-     */
-    public function monthlySchedules(){
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            // ... (lógica de guardado sin cambios)
+    public function holidays(){
+        if($_SERVER['REQUEST_METHOD'] == 'POST'){
+            $data = [
+                'name' => trim($_POST['name']),
+                'holiday_date' => trim($_POST['holiday_date']),
+                'company_id' => $_SESSION['user_company_id']
+            ];
+            if(!empty($data['name']) && !empty($data['holiday_date'])){
+                $this->holidayModel->createHoliday($data);
+                $_SESSION['flash_success'] = 'Feriado añadido con éxito.';
+            } else {
+                $_SESSION['flash_error'] = 'Por favor, completa todos los campos.';
+            }
+            redirect('admin/holidays');
         } else {
-            // ... (lógica de carga de datos existente)
-            $shifts = $this->shiftModel->getShiftsByCompany($_SESSION['user_company_id']);
-            $data['shifts'] = $shifts; // Se añaden los turnos a los datos de la vista
-            $this->view('admin/monthly_schedules', $data);
+            $holidays = $this->holidayModel->getHolidaysByCompany($_SESSION['user_company_id']);
+            $this->view('admin/holidays', ['holidays' => $holidays]);
         }
     }
+
+     public function deleteHoliday($id){
+        if($this->holidayModel->deleteHoliday($id)){
+            $_SESSION['flash_success'] = 'Feriado eliminado con éxito.';
+        }
+        redirect('admin/holidays');
+    }
+
+    public function templates(){
+        if($_SERVER['REQUEST_METHOD'] == 'POST'){
+            $weekString = $_POST['source_week']; // Formato '2025-W30'
+            list($year, $week) = sscanf($weekString, '%d-W%d');
+            $startDate = date('Y-m-d', strtotime($year . "W" . $week . 1));
+            $endDate = date('Y-m-d', strtotime($startDate . ' +6 days'));
+            
+            // Usamos el modelo WorkSchedule para obtener los horarios de la semana de origen
+            $entries = $this->workScheduleModel->getScheduleEntriesForPeriod($_SESSION['user_company_id'], $startDate, $endDate);
+
+            $data = [
+                'template_name' => trim($_POST['template_name']),
+                'company_id' => $_SESSION['user_company_id'],
+                'entries' => $entries
+            ];
+
+            if(!empty($data['template_name']) && !empty($data['entries'])){
+                $this->templateModel->createTemplateFromWeek($data);
+                $_SESSION['flash_success'] = 'Plantilla guardada con éxito.';
+            } else {
+                $_SESSION['flash_error'] = 'El nombre es requerido y la semana de origen no puede estar vacía.';
+            }
+            redirect('admin/templates');
+
+        } else {
+            $templates = $this->templateModel->getTemplatesByCompany($_SESSION['user_company_id']);
+            $this->view('admin/templates', ['templates' => $templates]);
+        }
+    }
+
+    public function deleteTemplate($id){
+        if($this->templateModel->deleteTemplate($id)){
+            $_SESSION['flash_success'] = 'Plantilla eliminada con éxito.';
+        }
+        redirect('admin/templates');
+    }
+
+
+    public function applyTemplate(){
+        if($_SERVER['REQUEST_METHOD'] == 'POST'){
+            $templateId = $_POST['template_id'];
+            $weekString = $_POST['target_week'];
+            list($year, $week) = sscanf($weekString, '%d-W%d');
+            $startDate = date('Y-m-d', strtotime($year . "W" . $week . 1));
+
+            if($this->templateModel->applyTemplateToWeek($templateId, $startDate, $_SESSION['user_company_id'])){
+                $_SESSION['flash_success'] = 'Plantilla aplicada con éxito.';
+            } else {
+                $_SESSION['flash_error'] = 'Error al aplicar la plantilla.';
+            }
+            redirect('admin/weeklyPlanner?week=' . $weekString);
+        }
+    }
+
+    public function reports(){
+        // Definir filtros (fechas por defecto: mes actual)
+        $filters = [
+            'start_date' => isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-01'),
+            'end_date'   => isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-t'),
+            'user_id'    => isset($_GET['user_id']) ? $_GET['user_id'] : 'all'
+        ];
+
+        $users = $this->userModel->getUsersByCompany($_SESSION['user_company_id']);
+        $report_data = array();
+
+        // Solo generar reporte si se ha enviado el formulario (hay un start_date)
+        if(isset($_GET['start_date'])){
+            $allEntries = $this->workScheduleModel->getScheduleEntriesForPeriod($_SESSION['user_company_id'], $filters['start_date'], $filters['end_date']);
+            
+            // Filtrar por usuario si no son "todos"
+            $filteredEntries = ($filters['user_id'] != 'all') 
+                ? array_filter($allEntries, function($e) use ($filters) { return $e->user_id == $filters['user_id']; })
+                : $allEntries;
+
+            // Procesar los datos para el reporte
+            foreach($filteredEntries as $entry){
+                $userId = $entry->user_id;
+                if(!isset($report_data[$userId])){
+                    $user = $this->userModel->getUserById($userId);
+                    $report_data[$userId] = [
+                        'full_name' => $user->full_name,
+                        'limit' => $user->weekly_hour_limit,
+                        'regular_hours' => 0,
+                        'overtime_hours' => 0,
+                        'total_hours' => 0
+                    ];
+                }
+
+                $hours = 0;
+                if (!empty($entry->start_time) && !empty($entry->end_time)) {
+                    $start = strtotime($entry->start_time); $end = strtotime($entry->end_time);
+                    if ($end < $start) { $end += 24 * 3600; }
+                    $hours = ($end - $start) / 3600;
+                }
+
+                if($entry->type == 'overtime'){
+                    $report_data[$userId]['overtime_hours'] += $hours;
+                } else {
+                    $report_data[$userId]['regular_hours'] += $hours;
+                }
+                $report_data[$userId]['total_hours'] += $hours;
+            }
+        }
+        
+        $data = [
+            'users' => $users,
+            'filters' => $filters,
+            'report_data' => $report_data
+        ];
+
+        $this->view('admin/reports', $data);
+    }
+
+    /**
+     * NUEVO: Exporta el reporte generado a un archivo CSV.
+     */
+    public function exportReportCsv(){
+        // Re-generamos los datos exactamente como en el reporte
+        $filters = [
+            'start_date' => isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-01'),
+            'end_date'   => isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-t'),
+            'user_id'    => isset($_GET['user_id']) ? $_GET['user_id'] : 'all'
+        ];
+        // ... (copiar la misma lógica de generación de $report_data del método reports() aquí) ...
+
+        // Lógica para generar el CSV
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="reporte_horas_' . date('Y-m-d') . '.csv"');
+        
+        $output = fopen('php://output', 'w');
+        // Encabezados del CSV
+        fputcsv($output, ['Empleado', 'Horas Regulares', 'Horas Extras', 'Total Horas']);
+
+        foreach($report_data as $report){
+            fputcsv($output, [
+                $report['full_name'],
+                number_format($report['regular_hours'], 2, ',', ''),
+                number_format($report['overtime_hours'], 2, ',', ''),
+                number_format($report['total_hours'], 2, ',', '')
+            ]);
+        }
+        fclose($output);
+    }
+    
 }
 ?>

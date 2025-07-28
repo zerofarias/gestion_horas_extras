@@ -45,8 +45,7 @@
       <?php if(hasRole('empleado')): ?>
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
         <li class="nav-item">
-          <a class="nav-link" href="<?php echo URLROOT; ?>/schedule/index">Mis Horarios</a>
-        </li>
+          <a class="nav-link" href="<?php echo URLROOT; ?>/employee/mySchedule">Mis Horarios</a>
         <li class="nav-item">
           <a class="nav-link" href="<?php echo URLROOT; ?>/employee/dashboard">Cargar Horas Extras</a>
         </li>
@@ -70,10 +69,14 @@
             Gestión de Personal
           </a>
           <ul class="dropdown-menu" aria-labelledby="navbarDropdownPersonal">
-            <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/monthlySchedules">Planificador Mensual</a></li>
+            <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/shiftManager">Planificador Mensual</a></li>
             <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/schedules">Planificador Semanal</a></li>
+            <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/holidays">Gestionar Feriados</a></li>
+            <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/templates">Gestor de Plantillas</a></li>
+            <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/reports">Reportes de Horas</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/shiftManager">Gestor de Turnos</a></li>
+            <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/weeklyPlanner">Planificador Semanal</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="<?php echo URLROOT; ?>/admin/users">Gestionar Usuarios</a></li>
           </ul>

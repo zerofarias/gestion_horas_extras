@@ -68,33 +68,26 @@ class AdminController {
         $employeesWithPending = $this->overtimeModel->countEmployeesWithPendingHours();
 
         // --- Gráficos ---
-        $weekSchedule = $this->workScheduleModel->getDashboardScheduleSummary($companyId, date('Y-m-d', strtotime('monday this week')), date('Y-m-d', strtotime('sunday this week')));
-        $workloadByDay = array_fill(0, 7, 0);
-        foreach($weekSchedule as $entry){ 
-            $hours = 0;
-            if($entry->start_time && $entry->end_time){
-                $start = strtotime($entry->start_time);
-                $end = strtotime($entry->end_time);
-                if($end < $start) { $end += 24 * 3600; }
-                $hours = ($end - $start) / 3600;
-            }
-            $dayIndex = date('N', strtotime($entry->schedule_date)) - 1;
-            $workloadByDay[$dayIndex] += $hours;
-        }
+        $overtime_50 = isset($pendingOvertimeTotals->total_50) ? $pendingOvertimeTotals->total_50 : 0;
+        $overtime_100 = isset($pendingOvertimeTotals->total_100) ? $pendingOvertimeTotals->total_100 : 0;
         
         $topEmployees = $this->overtimeModel->getTopEmployeesByPendingHours(5);
+        
+        $overtimeByDayRaw = $this->overtimeModel->getPendingHoursByDayOfWeek();
+        $overtimeByDay = array_fill(0, 7, 0);
+        if(!empty($overtimeByDayRaw)){
+            foreach($overtimeByDayRaw as $day) { $overtimeByDay[$day->day_of_week - 1] = $day->total_hours; }
+        }
+
         $monthRequests = $this->requestModel->getMonthlyRequestSummary($companyId, date('Y-m'));
-        $requestLabels = array(); 
-        $requestData = array();
-        foreach($monthRequests as $req){ $requestLabels[] = $req->type_name; $requestData[] = $req->count; }
+        $requestLabels = array(); $requestData = array();
+        if(!empty($monthRequests)){
+            foreach($monthRequests as $req){ $requestLabels[] = $req->type_name; $requestData[] = $req->count; }
+        }
 
         // --- Paneles de Acción y Comunidad ---
         $upcomingBirthdays = $this->userModel->getUpcomingBirthdays($companyId, 7);
         $latestSuggestion = $this->suggestionModel->getLatestSuggestionByCompany($companyId);
-
-        // CORRECCIÓN PARA PHP 5.6: Reemplazar el operador ??
-        $overtime_50 = isset($pendingOvertimeTotals->total_50) ? $pendingOvertimeTotals->total_50 : 0;
-        $overtime_100 = isset($pendingOvertimeTotals->total_100) ? $pendingOvertimeTotals->total_100 : 0;
 
         $data = array(
             'stats' => array(
@@ -108,7 +101,7 @@ class AdminController {
             ),
             'charts' => array(
                 'overtime_distribution' => json_encode(array($overtime_50, $overtime_100)),
-                'workload' => json_encode($workloadByDay),
+                'overtime_by_day' => json_encode($overtimeByDay),
                 'requests' => array('labels' => json_encode($requestLabels), 'data' => json_encode($requestData))
             ),
             'top_employees' => $topEmployees,

@@ -45,7 +45,9 @@
                 <tr>
                     <th>Empleado</th>
                     <th>Horas Regulares</th>
-                    <th>Horas Extras Planificadas</th>
+                    <?php if (!empty($data['overtime_in_reports'])): ?>
+                    <th>Horas extras planificadas</th>
+                    <?php endif; ?>
                     <th>Total de Horas</th>
                 </tr>
             </thead>
@@ -54,7 +56,9 @@
                     <tr>
                         <td><?php echo htmlspecialchars($report['full_name']); ?></td>
                         <td><?php echo number_format($report['regular_hours'], 2); ?> hs</td>
+                        <?php if (!empty($data['overtime_in_reports'])): ?>
                         <td><?php echo number_format($report['overtime_hours'], 2); ?> hs</td>
+                        <?php endif; ?>
                         <td><strong><?php echo number_format($report['total_hours'], 2); ?> hs</strong></td>
                     </tr>
                 <?php endforeach; ?>

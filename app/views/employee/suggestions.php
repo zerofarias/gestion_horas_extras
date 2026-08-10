@@ -1,49 +1,57 @@
-<?php
-// ----------------------------------------------------------------------
-// ARCHIVO 6: app/views/employee/suggestions.php (NUEVO ARCHIVO)
-// Esta es la nueva página para que los empleados envíen sugerencias.
-// Debes CREAR este archivo en la ruta app/views/employee/.
-// ----------------------------------------------------------------------
+<?php require APPROOT . '/views/inc/header.php'; ?>
 
-require APPROOT . '/views/inc/header.php'; ?>
-
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Buzón de Sugerencias Anónimas</h5>
-            </div>
-            <div class="card-body">
-                <p class="card-text text-muted">
-                    Este es un espacio seguro para que compartas tus ideas, sugerencias o inquietudes de forma <strong>100% anónima</strong>.
-                    Tu nombre no será registrado.
-                </p>
-                <form action="<?php echo URLROOT; ?>/suggestion/submit" method="post">
-                    <div class="mb-3">
-                        <label for="suggestion_text" class="form-label">Tu Sugerencia:</label>
-                        <textarea name="suggestion_text" class="form-control" rows="5" placeholder="Escribe aquí tu idea..." required></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">Enviar Sugerencia Anónima</button>
-                </form>
-            </div>
-        </div>
+<!-- ══ ENCABEZADO ══ -->
+<div class="emp-page-header">
+    <a href="<?php echo URLROOT; ?>/employee/index" class="emp-back-btn">
+        <i class="fas fa-arrow-left"></i>
+    </a>
+    <div>
+        <h1 class="emp-page-title">Sugerencias</h1>
+        <p class="emp-page-subtitle">Tu opinión nos importa — es 100% anónima</p>
     </div>
 </div>
 
+<div class="emp-suggestion-hero">
+    <i class="fas fa-lock emp-suggestion-icon"></i>
+    <p>Este espacio es completamente <strong>anónimo</strong>. Tu nombre no queda registrado en ningún momento.</p>
+</div>
+
+<div class="emp-card emp-form-card">
+    <form action="<?php echo URLROOT; ?>/suggestion/submit" method="post" id="formSugerencia">
+        <?php echo csrf_field(); ?>
+        <div class="emp-form-group">
+            <label class="emp-label">Tu sugerencia o comentario</label>
+            <textarea name="suggestion_text" class="emp-input emp-textarea" rows="6"
+                      placeholder="Compartí ideas, mejoras, inquietudes..." required
+                      id="txtSugerencia" maxlength="1000"></textarea>
+            <div class="emp-char-counter">
+                <span id="charCount">0</span> / 1000 caracteres
+            </div>
+        </div>
+        <button type="submit" class="emp-btn-primary w-100">
+            <i class="fas fa-paper-plane me-2"></i>Enviar anónimamente
+        </button>
+    </form>
+</div>
+
+<div style="height:80px" class="d-lg-none"></div>
+
 <?php require APPROOT . '/views/inc/footer.php'; ?>
 
-<!-- Script para mostrar la alerta de éxito con SweetAlert -->
+<script>
+const txt = document.getElementById('txtSugerencia');
+const counter = document.getElementById('charCount');
+txt.addEventListener('input', function(){ counter.textContent = this.value.length; });
+</script>
+
 <?php if(isset($_SESSION['flash_success'])): ?>
 <script>
-    $(document).ready(function() {
-        Swal.fire({
-            title: '¡Enviado!',
-            text: '<?php echo $_SESSION['flash_success']; ?>',
-            icon: 'success',
-            timer: 3000,
-            showConfirmButton: false
-        });
-    });
+document.addEventListener('DOMContentLoaded', function(){
+    if(typeof Swal !== 'undefined'){
+        Swal.fire({title:'¡Enviado!',text:'Gracias por tu aporte.',icon:'success',timer:2500,showConfirmButton:false});
+    }
+});
 </script>
 <?php unset($_SESSION['flash_success']); ?>
 <?php endif; ?>
+

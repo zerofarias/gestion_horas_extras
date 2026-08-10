@@ -1,0 +1,4 @@
+-- Tras migration_prode_wc2026.sql ejecutar en CLI:
+--   php scripts/seed_prode_wc2026.php
+--
+-- Carga 48 equipos, 12 grupos y 72 partidos (sorteo FIFA 2026).

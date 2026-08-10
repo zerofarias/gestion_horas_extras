@@ -1,167 +1,179 @@
 <?php require APPROOT . '/views/inc/header.php'; ?>
 
-<form action="<?php echo URLROOT; ?>/admin/editUser/<?php echo $data['id']; ?>" method="post" enctype="multipart/form-data">
-    <div class="card shadow">
-        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">
-                <a href="<?php echo URLROOT; ?>/admin/users" class="btn btn-light me-2" title="Volver"><i class="fas fa-arrow-left"></i></a>
-                Ficha del Empleado: <?php echo htmlspecialchars($data['user']->full_name); ?>
-            </h4>
-            <button type="submit" class="btn btn-success"><i class="fas fa-save me-2"></i>Guardar Cambios</button>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <!-- Columna de la foto -->
-                <div class="col-lg-3 text-center pt-3">
-                    <img src="<?php echo URLROOT; ?>/uploads/avatars/<?php echo isset($data['user']->profile_picture) ? $data['user']->profile_picture : 'default.png'; ?>" 
-                         alt="Avatar" class="rounded-circle img-fluid mb-3" style="width: 150px; height: 150px; object-fit: cover;"
-                         onerror="this.onerror=null; this.src='<?php echo URLROOT; ?>/uploads/avatars/default.png';">
-                    <label for="profile_picture" class="form-label">Cambiar Foto de Perfil</label>
-                    <input type="file" name="profile_picture" id="profile_picture" class="form-control form-control-sm">
-                </div>
-
-                <!-- Columna de los datos con pestañas -->
-                <div class="col-lg-9">
-                    <ul class="nav nav-tabs" id="myTab" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="personal-tab" data-bs-toggle="tab" data-bs-target="#personal" type="button" role="tab">Personales</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="laboral-tab" data-bs-toggle="tab" data-bs-target="#laboral" type="button" role="tab">Laborales</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="acceso-tab" data-bs-toggle="tab" data-bs-target="#acceso" type="button" role="tab">Acceso</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="documentos-tab" data-bs-toggle="tab" data-bs-target="#documentos" type="button" role="tab">Documentos</button>
-                        </li>
-                    </ul>
-                    <div class="tab-content p-3 border border-top-0" id="myTabContent">
-                        <!-- Pestaña Datos Personales -->
-                        <div class="tab-pane fade show active" id="personal" role="tabpanel">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Nombre Completo</label>
-                                    <input type="text" name="full_name" class="form-control" value="<?php echo isset($data['user']->full_name) ? htmlspecialchars($data['user']->full_name) : ''; ?>">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Fecha de Nacimiento</label>
-                                    <input type="date" name="birth_date" class="form-control" value="<?php echo isset($data['user']->birth_date) ? $data['user']->birth_date : ''; ?>">
-                                </div>
-                                <div class="col-md-12 mb-3">
-                                    <label class="form-label">Dirección</label>
-                                    <input type="text" name="address" class="form-control" value="<?php echo isset($data['user']->address) ? htmlspecialchars($data['user']->address) : ''; ?>">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Teléfono</label>
-                                    <input type="text" name="phone" class="form-control" value="<?php echo isset($data['user']->phone) ? htmlspecialchars($data['user']->phone) : ''; ?>">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Nº de Hijos</label>
-                                    <input type="number" name="children_count" class="form-control" value="<?php echo isset($data['user']->children_count) ? $data['user']->children_count : '0'; ?>">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Nombre Contacto de Emergencia</label>
-                                    <input type="text" name="emergency_contact_name" class="form-control" value="<?php echo isset($data['user']->emergency_contact_name) ? htmlspecialchars($data['user']->emergency_contact_name) : ''; ?>">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Teléfono Contacto de Emergencia</label>
-                                    <input type="text" name="emergency_contact_phone" class="form-control" value="<?php echo isset($data['user']->emergency_contact_phone) ? htmlspecialchars($data['user']->emergency_contact_phone) : ''; ?>">
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Pestaña Datos Laborales -->
-                        <div class="tab-pane fade" id="laboral" role="tabpanel">
-                             <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Email</label>
-                                    <input type="email" name="email" class="form-control" value="<?php echo isset($data['user']->email) ? htmlspecialchars($data['user']->email) : ''; ?>">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Fecha de Ingreso</label>
-                                    <input type="date" name="start_date" class="form-control" value="<?php echo isset($data['user']->start_date) ? $data['user']->start_date : ''; ?>">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Empresa</label>
-                                    <select name="company_id" class="form-select">
-                                        <?php foreach($data['companies'] as $company): ?>
-                                            <option value="<?php echo $company->id; ?>" <?php echo (isset($data['user']->company_id) && $company->id == $data['user']->company_id) ? 'selected' : ''; ?>>
-                                                <?php echo $company->name; ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Obra Social</label>
-                                    <input type="text" name="health_insurance" class="form-control" value="<?php echo isset($data['user']->health_insurance) ? htmlspecialchars($data['user']->health_insurance) : ''; ?>">
-                                </div>
-                             </div>
-                        </div>
-                        <!-- Pestaña Acceso -->
-                        <div class="tab-pane fade" id="acceso" role="tabpanel">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Nombre de Usuario</label>
-                                    <input type="text" name="username" class="form-control" value="<?php echo isset($data['user']->username) ? htmlspecialchars($data['user']->username) : ''; ?>">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Rol</label>
-                                    <select name="role" class="form-select">
-                                        <option value="empleado" <?php echo (isset($data['user']->role) && $data['user']->role == 'empleado') ? 'selected' : ''; ?>>Empleado</option>
-                                        <option value="admin" <?php echo (isset($data['user']->role) && $data['user']->role == 'admin') ? 'selected' : ''; ?>>Administrador</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Nueva Contraseña</label>
-                                    <input type="password" name="password" class="form-control" placeholder="Dejar en blanco para no cambiar">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Confirmar Nueva Contraseña</label>
-                                    <input type="password" name="confirm_password" class="form-control">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">ID de Reloj</label>
-                                    <input type="text" name="clock_id" class="form-control" value="<?php echo isset($data['user']->clock_id) ? htmlspecialchars($data['user']->clock_id) : ''; ?>">
-                                </div>
-                                <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="role" class="form-label">Rol</label>
-                                    <select name="role" id="role" class="form-select">
-                                        <option value="empleado" <?php if($data['user']->role == 'empleado') echo 'selected'; ?>>Empleado</option>
-                                        <option value="admin" <?php if($data['user']->role == 'admin') echo 'selected'; ?>>Admin</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="weekly_hour_limit" class="form-label">Límite de Horas Semanales</label>
-                                    <input type="number" step="0.25" name="weekly_hour_limit" id="weekly_hour_limit" class="form-control" value="<?php echo htmlspecialchars($data['user']->weekly_hour_limit); ?>">
-                                    <small class="form-text text-muted">Horas a partir de las cuales se consideran extras (ej. 44).</small>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Pestaña Documentos -->
-                        <div class="tab-pane fade" id="documentos" role="tabpanel">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Foto DNI (Frente)</label>
-                                    <input type="file" name="dni_photo_front" class="form-control">
-                                    <?php if(isset($data['user']->dni_photo_front) && !empty($data['user']->dni_photo_front)): ?>
-                                        <a href="<?php echo URLROOT . '/uploads/documents/' . $data['user']->dni_photo_front; ?>" target="_blank">Ver DNI Frente actual</a>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Foto DNI (Dorso)</label>
-                                    <input type="file" name="dni_photo_back" class="form-control">
-                                     <?php if(isset($data['user']->dni_photo_back) && !empty($data['user']->dni_photo_back)): ?>
-                                        <a href="<?php echo URLROOT . '/uploads/documents/' . $data['user']->dni_photo_back; ?>" target="_blank">Ver DNI Dorso actual</a>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-9">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-user-edit me-2"></i>Editar Usuario: <?php echo htmlspecialchars($data['user']->full_name); ?></h5>
+            </div>
+            <div class="card-body p-4">
+                <form action="<?php echo URLROOT; ?>/admin/editUser/<?php echo $data['user']->id; ?>" method="post" enctype="multipart/form-data" autocomplete="off">
+                    <?php echo csrf_field(); ?>
+                    <h6 class="mb-3 text-muted">Foto de Perfil</h6>
+                    <div class="mb-4 d-flex align-items-center gap-4">
+                        <img id="avatarPreview"
+                             src="<?php echo htmlspecialchars(avatar_url($data['user']->profile_picture ?? '')); ?>"
+                             alt="Foto de perfil"
+                             class="rounded-circle border bg-light"
+                             style="width:90px;height:90px;object-fit:cover;"
+                             onerror="this.onerror=null;this.src='<?php echo htmlspecialchars(avatar_default_url(), ENT_QUOTES); ?>';">
+                        <div class="flex-grow-1">
+                            <label for="profile_picture" class="form-label mb-1">Cambiar foto <small class="text-muted">(JPG, PNG, WEBP · máx. 2 MB)</small></label>
+                            <input type="file" name="profile_picture" id="profile_picture" accept="image/*"
+                                   class="form-control <?php echo isset($data['errors']['picture']) ? 'is-invalid' : ''; ?>"
+                                   onchange="if(this.files[0]){document.getElementById('avatarPreview').src=URL.createObjectURL(this.files[0])}">
+                            <?php if(isset($data['errors']['picture'])): ?>
+                                <div class="invalid-feedback"><?php echo htmlspecialchars($data['errors']['picture']); ?></div>
+                            <?php endif; ?>
                         </div>
                     </div>
-                </div>
+
+                    <hr class="my-3">
+                    <h6 class="mb-3 text-muted">Información Principal</h6>
+                    <?php
+                    $nameSource = isset($data['user']) ? $data['user'] : null;
+                    if (!empty($data['first_name']) || !empty($data['last_name'])) {
+                        $nameSource = $data;
+                    }
+                    require APPROOT . '/views/admin/partials/user_name_fields.php';
+                    ?>
+
+                    <div class="mb-3">
+                        <label class="form-label">Usuario de acceso</label>
+                        <input type="text" class="form-control" value="<?php echo htmlspecialchars($data['user']->username); ?>" disabled>
+                        <small class="text-muted">El nombre de usuario no se modifica desde aquí.</small>
+                    </div>
+
+                    <?php
+                    $profileExtendedReady = (new User())->isProfileExtendedReady();
+                    $profileSource = $data['user'];
+                    require APPROOT . '/views/admin/partials/user_profile_fields.php';
+                    ?>
+
+                    <hr class="my-3">
+                    <h6 class="mb-2 text-muted"><i class="fas fa-building me-1"></i> Empresa</h6>
+                    <?php
+                    $selectedCompanyId = (int)($data['user']->company_id ?? 0);
+                    $currentCompanyLabel = !empty($data['current_company_name'])
+                        ? $data['current_company_name']
+                        : 'Sin empresa asignada';
+                    ?>
+                    <p class="small text-muted mb-2">
+                        Actual: <strong><?php echo htmlspecialchars($currentCompanyLabel); ?></strong>.
+                        Los empleados solo intercambian turnos con compañeros de la misma empresa.
+                    </p>
+                    <?php if (empty($data['companies'])): ?>
+                    <div class="alert alert-warning small mb-3">
+                        No hay empresas en el sistema. Ejecutá <code>migration_companies_grupo.sql</code> en MySQL o
+                        <a href="<?php echo URLROOT; ?>/admin/companies">creá empresas aquí</a>.
+                    </div>
+                    <?php else: ?>
+                    <div class="mb-3">
+                        <label for="company_id" class="form-label">Asignar / cambiar empresa <span class="text-danger">*</span></label>
+                        <select name="company_id" id="company_id" class="form-select <?php echo isset($data['errors']['company_id']) ? 'is-invalid' : ''; ?>" required>
+                            <option value="">— Seleccioná empresa —</option>
+                            <?php foreach ($data['companies'] as $co): ?>
+                            <option value="<?php echo (int)$co->id; ?>" <?php echo $selectedCompanyId === (int)$co->id ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($co->name); ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if (isset($data['errors']['company_id'])): ?>
+                        <div class="invalid-feedback d-block"><?php echo htmlspecialchars($data['errors']['company_id']); ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php require APPROOT . '/views/admin/partials/user_area_field.php'; ?>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="role" class="form-label">Rol</label>
+                            <select name="role" id="role" class="form-select">
+                                <option value="empleado" <?php if($data['user']->role == 'empleado') echo 'selected'; ?>>Empleado</option>
+                                <option value="supervisor" <?php if($data['user']->role == 'supervisor') echo 'selected'; ?>>Supervisor (jefe de área)</option>
+                                <option value="admin" <?php if($data['user']->role == 'admin') echo 'selected'; ?>>Admin</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="password" class="form-label">Nueva Contraseña</label>
+                            <input type="password" name="password" id="password" class="form-control" placeholder="Dejar en blanco para no cambiar" autocomplete="new-password">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="confirm_password" class="form-label">Confirmar Contraseña</label>
+                            <input type="password" name="confirm_password" id="confirm_password" class="form-control" autocomplete="new-password">
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h6 class="mb-3 text-muted">Configuración de Horarios</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="hourly_rate" class="form-label">Tarifa por Hora</label>
+                            <input type="number" step="0.01" name="hourly_rate" id="hourly_rate" class="form-control" value="<?php echo htmlspecialchars($data['user']->hourly_rate); ?>">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="weekly_hour_limit" class="form-label">Límite de Horas Semanales</label>
+                            <input type="number" step="0.25" name="weekly_hour_limit" id="weekly_hour_limit" class="form-control" value="<?php echo htmlspecialchars($data['user']->weekly_hour_limit); ?>">
+                            <small class="form-text text-muted">Para cálculo de H. Extras (ej. 44).</small>
+                        </div>
+                    </div>
+
+                    <?php
+                    $source = isset($data['user']) ? $data['user'] : $data;
+                    if (!empty($data['probation_start_date']) || !empty($data['hire_date'])) {
+                        $source = (object)array_merge((array)$source, [
+                            'probation_start_date' => $data['probation_start_date'] ?? '',
+                            'hire_date' => $data['hire_date'] ?? '',
+                            'agreement_id' => $data['agreement_id'] ?? 0,
+                        ]);
+                    }
+                    require APPROOT . '/views/admin/partials/user_employment_fields.php';
+                    ?>
+
+                    <hr class="my-4">
+                    <h6 class="mb-1 text-muted">IDs de Empleado en Relojes</h6>
+                    <p class="text-muted small mb-3">
+                        Los IDs se gestionan desde la pantalla de mapeo al consultar la API.
+                    </p>
+                    <?php if (!empty($data['clock_mappings'])): ?>
+                    <ul class="list-group list-group-flush mb-2">
+                        <?php foreach ($data['clock_mappings'] as $clockName => $clockId): ?>
+                        <li class="list-group-item d-flex align-items-center gap-2 px-0 py-1 border-0">
+                            <i class="fas fa-circle-check" style="color:var(--clr-primary);"></i>
+                            <strong><?php echo htmlspecialchars($clockName); ?></strong>:
+                            <code><?php echo htmlspecialchars($clockId); ?></code>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php else: ?>
+                    <p class="text-warning small"><i class="fas fa-exclamation-triangle me-1"></i>Sin IDs asignados.</p>
+                    <?php endif; ?>
+                    <a href="<?php echo URLROOT; ?>/admin/mapeoApi" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-link me-1"></i> Gestionar mapeos en la página de mapeo
+                    </a>
+
+                    <?php if (!empty($data['user']) && (new User())->isPlexOperatorReady()): ?>
+                    <hr class="my-4">
+                    <h6 class="mb-3 text-muted">Ecofarma — operador API</h6>
+                    <div class="mb-3">
+                        <label for="plex_operator_name" class="form-label">Nombre operador (resumen comisiones)</label>
+                        <input type="text" name="plex_operator_name" id="plex_operator_name" class="form-control"
+                               value="<?php echo htmlspecialchars($data['user']->plex_operator_name ?? ''); ?>"
+                               placeholder="Como figura en la API de Ecofarma">
+                        <div class="form-text">Debe coincidir con el nombre del operador en facturación ACOS.</div>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">Guardar Cambios</button>
+                    </div>
+                </form>
             </div>
         </div>
-    </form>
+    </div>
 </div>
 
 <?php require APPROOT . '/views/inc/footer.php'; ?>

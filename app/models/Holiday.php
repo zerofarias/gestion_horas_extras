@@ -33,9 +33,25 @@ class Holiday {
     }
 
     public function deleteHoliday($id) {
-        $this->db->query("DELETE FROM holidays WHERE id = :id");
+        $this->db->query('DELETE FROM holidays WHERE id = :id');
         $this->db->bind(':id', $id);
         return $this->db->execute();
+    }
+
+    public function deleteHolidayForCompany($id, $companyId) {
+        $this->db->query('DELETE FROM holidays WHERE id = ? AND company_id = ?');
+        return $this->db->execute([(int)$id, (int)$companyId]);
+    }
+
+    public function isHolidayForCompany($companyId, $date) {
+        $companyId = (int)$companyId;
+        $date = trim((string)$date);
+        if ($companyId <= 0 || $date === '') {
+            return false;
+        }
+        $this->db->query('SELECT id FROM holidays WHERE company_id = ? AND holiday_date = ? LIMIT 1');
+        $this->db->single([$companyId, $date]);
+        return $this->db->rowCount() > 0;
     }
 }
 ?>

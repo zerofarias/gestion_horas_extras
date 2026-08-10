@@ -1,0 +1,149 @@
+.notif-hub-grid .notif-hub-card {
+    display: block;
+    padding: 1.5rem;
+    border-radius: var(--radius-lg, 12px);
+    background: var(--clr-surface, #fff);
+    border: 1px solid var(--clr-border, #e2e8f0);
+    text-decoration: none;
+    color: inherit;
+    height: 100%;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+.notif-hub-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+    color: inherit;
+}
+.notif-hub-card i {
+    font-size: 1.75rem;
+    color: var(--clr-primary, #2563eb);
+    margin-bottom: 0.75rem;
+}
+.notif-hub-card h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.35rem;
+}
+.notif-hub-card p {
+    font-size: 0.85rem;
+    color: var(--clr-muted, #64748b);
+    margin: 0;
+}
+.notif-preview-img {
+    max-width: 200px;
+    max-height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+.topbar-notify-employee .emp-notif-item.is-unread {
+    background: rgba(37, 99, 235, 0.06);
+}
+.pay-stub-doc-card .card-header {
+    background: #fafafa;
+}
+.pay-stub-img-trigger {
+    cursor: zoom-in;
+}
+.pay-stub-img-trigger:hover .pay-stub-preview-img {
+    opacity: 0.92;
+}
+.pay-stub-preview-iframe {
+    width: 100%;
+    min-height: 520px;
+    border: none;
+    border-radius: 8px;
+}
+.pay-stub-preview-img {
+    max-width: 100%;
+    max-height: 70vh;
+    width: auto;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    border-radius: 6px;
+    transition: opacity 0.15s ease;
+}
+.pay-stub-fullscreen-iframe {
+    width: 100%;
+    height: calc(100vh - 56px);
+    border: none;
+    background: #fff;
+}
+.pay-stub-fullscreen-img {
+    max-width: 100%;
+    max-height: calc(100vh - 56px);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+.pay-stub-admin-note {
+    border-left: 3px solid var(--clr-info, #0ea5e9);
+}
+.pay-stub-note-preview {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pay-stub-signature-canvas {
+    width: 100%;
+    height: 180px;
+    border: 2px dashed var(--clr-border, #cbd5e1);
+    border-radius: 8px;
+    background: #fafafa;
+    touch-action: none;
+}
+.pay-stub-signature-img {
+    max-width: 100%;
+    border: 1px solid var(--clr-border, #e2e8f0);
+    border-radius: 8px;
+    background: #fff;
+}
+.notif-filter-box {
+    max-height: 160px;
+    overflow-y: auto;
+    border: 1px solid var(--clr-border, #e2e8f0);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    background: #fafafa;
+}
+.notif-recipient-list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 0.25rem 0;
+}
+.notif-draggable-tag {
+    cursor: grab;
+    user-select: none;
+}
+.notif-draggable-tag.notif-dragging {
+    cursor: grabbing;
+    opacity: 0.65;
+}
+.notif-drop-active {
+    outline: 2px dashed var(--clr-primary, #2563eb);
+    outline-offset: 2px;
+    background: rgba(37, 99, 235, 0.04);
+}
+.notif-recipient-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem;
+    margin: 0;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.notif-recipient-row:last-child {
+    border-bottom: none;
+}
+.notif-recipient-row:hover {
+    background: #f8fafc;
+}
+.announcement-modal-img {
+    max-width: 100%;
+    max-height: 220px;
+    object-fit: contain;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+}

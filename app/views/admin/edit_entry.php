@@ -20,6 +20,7 @@ $entry = $data['entry'];
             </div>
             <div class="card-body">
                 <form action="<?php echo URLROOT; ?>/admin/editEntry/<?php echo $entry->id; ?>" method="post">
+                    <?php echo csrf_field(); ?>
                     <input type="hidden" name="user_id" value="<?php echo $entry->user_id; ?>">
                     <div class="mb-3">
                         <label for="date" class="form-label">Fecha:</label>

@@ -1,0 +1,130 @@
+.prode-page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding-bottom: 5rem;
+}
+
+.prode-hero {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.prode-hero-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+}
+
+.prode-hero-score-val {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #0d6efd;
+}
+
+.prode-group-nav-btn {
+    min-width: 2.75rem;
+    white-space: nowrap;
+}
+
+.prode-group-tabs .nav-link {
+    font-weight: 600;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.85rem;
+}
+
+.prode-match-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.prode-team {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.prode-team--away {
+    flex-direction: row-reverse;
+    text-align: right;
+}
+
+.prode-team-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.prode-flag {
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.08);
+}
+
+.prode-scores {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.prode-score-input {
+    width: 3rem;
+    text-align: center;
+    font-weight: 700;
+    padding: 0.25rem;
+}
+
+.prode-score-sep {
+    font-weight: 700;
+    color: #64748b;
+}
+
+.prode-match.is-locked {
+    opacity: 0.92;
+    background: #f8fafc;
+}
+
+.prode-match.is-saved {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0 !important;
+}
+
+.prode-match.is-saved .prode-score-input:disabled {
+    background: #fff;
+    color: #166534;
+    opacity: 1;
+}
+
+.prode-save-status.is-saving {
+    color: #0d6efd !important;
+}
+
+.prode-save-status.is-error {
+    color: #dc3545 !important;
+}
+
+.prode-submit-bar {
+    position: fixed;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    left: 0;
+    right: 0;
+    padding: 0.75rem 1rem;
+    background: rgba(255,255,255,.95);
+    border-top: 1px solid #e2e8f0;
+    z-index: 100;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+@media (min-width: 992px) {
+    .prode-submit-bar {
+        bottom: 0;
+        left: var(--sidebar-width, 260px);
+    }
+}

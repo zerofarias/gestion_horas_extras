@@ -1,42 +1,46 @@
 <?php
-// ----------------------------------------------------------------------
-// ARCHIVO: app/views/login/index.php (VERSIÓN CORREGIDA)
-// Este archivo solo debe contener el HTML para el formulario de login.
-// ----------------------------------------------------------------------
-
 require APPROOT . '/views/inc/header.php'; 
 ?>
 
-<div class="container d-flex justify-content-center align-items-center" style="min-height: 80vh;">
-    <div class="card shadow-lg p-4" style="width: 100%; max-width: 420px;">
-        <div class="card-body text-center">
-            
-            <i class="fas fa-user-clock fa-3x text-primary mb-3"></i>
-            <h2 class="card-title mb-3">Control de Horas</h2>
-            <p class="text-muted mb-4">Ingresa con el formato: <strong>usuario+contraseña</strong></p>
-            
-            <!-- El formulario apunta al método 'process' del LoginController -->
-            <form action="<?php echo URLROOT; ?>/login/process" method="post">
-                <div class="form-floating mb-3">
-                    <input type="password" name="login_data" class="form-control" id="login_data" placeholder=" " required>
-                    <label for="login_data">usuario+contraseña</label>
-                </div>
+<div class="card shadow-lg" style="width:100%;max-width:420px;border-top:4px solid var(--clr-primary,#e91e8c);">
+    <div class="card-body p-4 p-sm-5">
 
-                <!-- Muestra un mensaje de error si las credenciales son incorrectas -->
-                <?php if(isset($data['error']) && !empty($data['error'])): ?>
-                    <div class="alert alert-danger py-2">
-                        <?php echo $data['error']; ?>
-                    </div>
-                <?php endif; ?>
-
-                <button type="submit" class="btn btn-primary w-100 btn-lg">Ingresar</button>
-            </form>
-
+        <!-- Logo / ícono -->
+        <div class="text-center mb-4 login-brand-block">
+            <img src="<?php echo URLROOT; ?>/img/logo-paviotti.png"
+                 alt="<?php echo htmlspecialchars(SITENAME); ?>"
+                 class="login-brand-logo mb-3"
+                 width="88"
+                 height="88">
+            <h2 class="fw-bold mb-0 login-brand-title"><?php echo htmlspecialchars(SITENAME); ?></h2>
+            <p class="text-muted small mt-1">Gestión de personal y RRHH</p>
         </div>
+
+        <form action="<?php echo URLROOT; ?>/login/process" method="post">
+            <?php echo csrf_field(); ?>
+            <div class="form-floating mb-3">
+                <input type="password" name="login_data" class="form-control" id="login_data"
+                       placeholder=" " required autocomplete="current-password">
+                <label for="login_data"><i class="fas fa-key me-1 text-muted"></i> usuario+contraseña</label>
+            </div>
+
+            <?php if(isset($data['error']) && !empty($data['error'])): ?>
+                <div class="alert alert-danger py-2 d-flex align-items-center gap-2 mb-3">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <?php echo htmlspecialchars($data['error']); ?>
+                </div>
+            <?php endif; ?>
+
+            <button type="submit" class="btn btn-primary w-100 btn-lg fw-bold">
+                <i class="fas fa-sign-in-alt me-2"></i>Ingresar
+            </button>
+        </form>
+
+        <p class="text-center text-muted small mt-4 mb-0">
+            Formato: <kbd class="bg-light text-muted border">usuario<span style="color:#e91e8c;">+</span>contraseña</kbd>
+        </p>
     </div>
 </div>
 
-<?php 
-// Incluimos el pie de página común.
-require APPROOT . '/views/inc/footer.php'; 
-?>
+<?php require APPROOT . '/views/inc/footer.php'; ?>
+

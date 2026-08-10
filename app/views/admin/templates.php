@@ -11,7 +11,12 @@
                         <tr>
                             <td><?php echo htmlspecialchars($template->template_name); ?></td>
                             <td><?php echo date('d/m/Y', strtotime($template->created_at)); ?></td>
-                            <td><a href="<?php echo URLROOT; ?>/admin/deleteTemplate/<?php echo $template->id; ?>" class="btn btn-sm btn-danger">Eliminar</a></td>
+                            <td>
+                                <form method="post" action="<?php echo URLROOT; ?>/admin/deleteTemplate/<?php echo $template->id; ?>" class="d-inline" onsubmit="return confirm('¿Eliminar esta plantilla?');">
+                                    <?php echo csrf_field(); ?>
+                                    <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                                </form>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -24,6 +29,7 @@
             <div class="card-header"><h5 class="mb-0">Crear Plantilla desde Semana</h5></div>
             <div class="card-body">
                 <form action="<?php echo URLROOT; ?>/admin/templates" method="post">
+                    <?php echo csrf_field(); ?>
                     <div class="mb-3">
                         <label class="form-label">Nombre de la Nueva Plantilla</label>
                         <input type="text" name="template_name" class="form-control" placeholder="Ej: Rotativo Mañana" required>

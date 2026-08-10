@@ -50,9 +50,18 @@ class Template {
     }
 
     public function applyTemplateToWeek($templateId, $weekStartDate, $companyId){
-        // Obtener las entradas de la plantilla
-        $this->db->query("SELECT * FROM schedule_template_entries WHERE template_id = :template_id");
-        $this->db->bind(':template_id', $templateId);
+        $this->db->query('SELECT id FROM schedule_templates WHERE id = :tid AND company_id = :cid LIMIT 1');
+        $this->db->bind(':tid', (int)$templateId);
+        $this->db->bind(':cid', (int)$companyId);
+        if (!$this->db->single()) {
+            return false;
+        }
+
+        $this->db->query("SELECT ste.* FROM schedule_template_entries ste
+            INNER JOIN schedule_templates st ON st.id = ste.template_id
+            WHERE ste.template_id = :template_id AND st.company_id = :company_id");
+        $this->db->bind(':template_id', (int)$templateId);
+        $this->db->bind(':company_id', (int)$companyId);
         $templateEntries = $this->db->resultSet();
         
         if(empty($templateEntries)) return true; // No hay nada que aplicar
@@ -92,8 +101,15 @@ class Template {
     }
 
     public function deleteTemplate($id){
-        $this->db->query("DELETE FROM schedule_templates WHERE id = :id");
+        $this->db->query('DELETE FROM schedule_templates WHERE id = :id');
         $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
+
+    public function deleteTemplateForCompany($id, $companyId) {
+        $this->db->query('DELETE FROM schedule_templates WHERE id = :tpl_id AND company_id = :p_company_id');
+        $this->db->bind(':tpl_id', $id);
+        $this->db->bind(':p_company_id', $companyId);
         return $this->db->execute();
     }
 }

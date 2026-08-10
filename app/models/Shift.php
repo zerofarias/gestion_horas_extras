@@ -87,11 +87,62 @@ class Shift {
         }
     }
     /**
+     * Obtiene un turno con sus rangos por ID y company_id.
+     */
+    public function getShiftByIdAndCompany($id, $companyId){
+        $this->db->query('SELECT * FROM shifts WHERE id = :shift_id AND company_id = :p_company_id');
+        $this->db->bind(':shift_id', $id);
+        $this->db->bind(':p_company_id', $companyId);
+        $shift = $this->db->single();
+        if(!$shift) return null;
+
+        $this->db->query('SELECT start_time, end_time FROM shift_time_ranges WHERE shift_id = :shift_id ORDER BY start_time ASC');
+        $this->db->bind(':shift_id', $id);
+        $shift->ranges = $this->db->resultSet();
+        return $shift;
+    }
+
+    /**
+     * Actualiza un turno: reemplaza datos base y borra/reinserta rangos en una transacción.
+     */
+    public function updateShiftWithRanges($id, $companyId, $data){
+        try {
+            $this->db->beginTransaction();
+
+            $this->db->query('UPDATE shifts SET shift_name = :shift_name, notes = :notes, color = :color WHERE id = :shift_id AND company_id = :p_company_id');
+            $this->db->bind(':shift_name', $data['shift_name']);
+            $this->db->bind(':notes',      $data['notes']);
+            $this->db->bind(':color',      $data['color']);
+            $this->db->bind(':shift_id',   $id);
+            $this->db->bind(':p_company_id', $companyId);
+            $this->db->execute();
+
+            $this->db->query('DELETE FROM shift_time_ranges WHERE shift_id = :shift_id');
+            $this->db->bind(':shift_id', $id);
+            $this->db->execute();
+
+            $this->db->query('INSERT INTO shift_time_ranges (shift_id, start_time, end_time) VALUES (:shift_id, :start_time, :end_time)');
+            foreach($data['ranges'] as $range){
+                $this->db->bind(':shift_id',   $id);
+                $this->db->bind(':start_time', $range['inicio']);
+                $this->db->bind(':end_time',   $range['fin']);
+                $this->db->execute();
+            }
+
+            return $this->db->commit();
+        } catch(Exception $e){
+            $this->db->rollBack();
+            return false;
+        }
+    }
+
+    /**
      * Elimina un turno (sin cambios).
      */
-    public function deleteShift($id){
-        $this->db->query('DELETE FROM shifts WHERE id = :id');
-        $this->db->bind(':id', $id);
+    public function deleteShift($id, $companyId){
+        $this->db->query('DELETE FROM shifts WHERE id = :shift_id AND company_id = :p_company_id');
+        $this->db->bind(':shift_id', $id);
+        $this->db->bind(':p_company_id', $companyId);
         return $this->db->execute();
     }
 }

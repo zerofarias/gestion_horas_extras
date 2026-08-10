@@ -108,7 +108,37 @@ class WorkSchedule {
         return $userEntries;
     }
 
-        public function getDashboardScheduleSummary($companyId, $startDate, $endDate) {
+    public function getUserScheduleForMonth($userId, $companyId, $month) {
+        $startDate = date('Y-m-01', strtotime($month));
+        $endDate = date('Y-m-t', strtotime($month));
+
+        $sql = "SELECT 
+                    es.*, 
+                    s.shift_name, s.color 
+                FROM employee_schedules es
+                LEFT JOIN shifts s ON es.shift_id = s.id
+                JOIN users u ON es.user_id = u.id
+                WHERE u.company_id = :company_id 
+                AND es.user_id = :user_id
+                AND es.schedule_date BETWEEN :start_date AND :end_date
+                ORDER BY es.schedule_date ASC, es.start_time ASC";
+        
+        $this->db->query($sql);
+        $this->db->bind(':company_id', $companyId);
+        $this->db->bind(':user_id', $userId);
+        $this->db->bind(':start_date', $startDate);
+        $this->db->bind(':end_date', $endDate);
+        
+        $results = $this->db->resultSet();
+
+        $schedulesByDate = [];
+        foreach ($results as $row) {
+            $schedulesByDate[$row->schedule_date][] = $row;
+        }
+        return $schedulesByDate;
+    }
+
+    public function getDashboardScheduleSummary($companyId, $startDate, $endDate) {
             $sql = "SELECT schedule_date, type, start_time, end_time 
                     FROM employee_schedules es
                     JOIN users u ON es.user_id = u.id
@@ -122,30 +152,257 @@ class WorkSchedule {
         }
 
         public function getWhoIsWorkingNow($companyId) {
-            $sql = "SELECT u.full_name, s.shift_name, es.start_time, es.end_time
-                    FROM employee_schedules es
-                    JOIN users u ON es.user_id = u.id
-                    LEFT JOIN shifts s ON es.shift_id = s.id
-                    WHERE u.company_id = :company_id
+            $sql = $this->scheduleSelectWithResolvedTimes('u.full_name, s.shift_name') . "
+                    JOIN users u ON u.id = es.user_id
+                    WHERE u.company_id = :p_company_id
                     AND es.schedule_date = CURDATE()
-                    AND CURRENT_TIME() BETWEEN es.start_time AND es.end_time";
+                    AND (
+                        (es.start_time IS NOT NULL AND es.end_time IS NOT NULL
+                         AND CURRENT_TIME() BETWEEN es.start_time AND es.end_time)
+                        OR (str.shift_id IS NOT NULL
+                         AND CURRENT_TIME() BETWEEN str.first_start AND str.last_end)
+                    )
+                    ORDER BY COALESCE(es.start_time, str.first_start)";
             $this->db->query($sql);
-            $this->db->bind(':company_id', $companyId);
+            $this->db->bind(':p_company_id', $companyId);
             return $this->db->resultSet();
         }
 
         public function countWorkingNowByCompany($companyId) {
-    $sql = "SELECT COUNT(DISTINCT es.user_id) as count
+            $sql = "SELECT COUNT(DISTINCT es.user_id) AS count
+                FROM employee_schedules es
+                JOIN users u ON es.user_id = u.id
+                LEFT JOIN (
+                    SELECT shift_id,
+                           MIN(start_time) AS first_start,
+                           MAX(end_time) AS last_end
+                    FROM shift_time_ranges
+                    GROUP BY shift_id
+                ) str ON str.shift_id = es.shift_id
+                WHERE u.company_id = :p_company_id
+                AND es.schedule_date = CURDATE()
+                AND (
+                    (es.start_time IS NOT NULL AND es.end_time IS NOT NULL
+                     AND CURRENT_TIME() BETWEEN es.start_time AND es.end_time)
+                    OR (str.shift_id IS NOT NULL
+                     AND CURRENT_TIME() BETWEEN str.first_start AND str.last_end)
+                )";
+            $this->db->query($sql);
+            $this->db->bind(':p_company_id', $companyId);
+            $row = $this->db->single();
+            return $row ? (int)$row->count : 0;
+        }
+
+    public function getSchedulesForUserOnDate($userId, $date) {
+        $this->db->query($this->scheduleSelectWithResolvedTimes() . "
+            WHERE es.user_id = :user_id
+              AND es.schedule_date = :schedule_date
+              AND (
+                  (es.start_time IS NOT NULL AND es.end_time IS NOT NULL)
+                  OR str.shift_id IS NOT NULL
+              )
+            ORDER BY COALESCE(es.start_time, str.first_start) ASC
+        ");
+        $this->db->bind(':user_id', $userId);
+        $this->db->bind(':schedule_date', $date);
+        return $this->db->resultSet();
+    }
+
+    /**
+     * Todas las entradas del planificador para un día (incluye vacaciones, licencias, etc.).
+     */
+    public function getPlannerEntriesForUserOnDate($userId, $date) {
+        $this->db->query($this->scheduleSelectWithResolvedTimes() . "
+            WHERE es.user_id = :user_id
+              AND es.schedule_date = :schedule_date
+            ORDER BY COALESCE(es.start_time, str.first_start) ASC, es.id ASC
+        ");
+        $this->db->bind(':user_id', (int)$userId);
+        $this->db->bind(':schedule_date', $date);
+        return $this->db->resultSet();
+    }
+
+    public function getScheduleEntryById($scheduleId, $companyId = null) {
+        $sql = $this->scheduleSelectWithResolvedTimes('es.*, u.full_name, u.company_id') . "
+                JOIN users u ON u.id = es.user_id
+                WHERE es.id = :schedule_id";
+        if ($companyId !== null) {
+            $sql .= ' AND u.company_id = :p_company_id';
+        }
+        $this->db->query($sql);
+        $this->db->bind(':schedule_id', $scheduleId);
+        if ($companyId !== null) {
+            $this->db->bind(':p_company_id', $companyId);
+        }
+        return $this->db->single();
+    }
+
+    public function getUpcomingSchedulesForUser($userId, $companyId, $fromDate = null, $toDate = null) {
+        $fromDate = $fromDate ?: date('Y-m-d');
+        $toDate = $toDate ?: date('Y-m-d', strtotime('+60 days'));
+
+        $this->db->query($this->scheduleSelectWithResolvedTimes() . "
+            WHERE es.user_id = :user_id
+              AND es.schedule_date BETWEEN :from_date AND :to_date
+              AND (
+                  (es.start_time IS NOT NULL AND es.end_time IS NOT NULL)
+                  OR str.shift_id IS NOT NULL
+              )
+            ORDER BY es.schedule_date ASC, COALESCE(es.start_time, str.first_start) ASC
+        ");
+        $this->db->bind(':user_id', $userId);
+        $this->db->bind(':from_date', $fromDate);
+        $this->db->bind(':to_date', $toDate);
+        return $this->db->resultSet();
+    }
+
+    /**
+     * SELECT base: horarios con horas propias o tomadas del turno (shift_time_ranges).
+     */
+    private function scheduleSelectWithResolvedTimes($esColumns = 'es.*') {
+        return "SELECT {$esColumns}, s.shift_name, s.color,
+                COALESCE(es.start_time, str.first_start) AS start_time,
+                COALESCE(es.end_time, str.last_end) AS end_time
             FROM employee_schedules es
-            JOIN users u ON es.user_id = u.id
-            WHERE u.company_id = :company_id
-            AND es.schedule_date = CURDATE()
-            AND CURRENT_TIME() BETWEEN es.start_time AND es.end_time";
-    $this->db->query($sql);
-    $this->db->bind(':company_id', $companyId);
-    $row = $this->db->single();
-    return $row ? $row->count : 0;
-}
+            LEFT JOIN shifts s ON s.id = es.shift_id
+            LEFT JOIN (
+                SELECT shift_id,
+                       MIN(start_time) AS first_start,
+                       MAX(end_time) AS last_end
+                FROM shift_time_ranges
+                GROUP BY shift_id
+            ) str ON str.shift_id = es.shift_id";
+    }
+
+    public function getUsersApproachingWeeklyLimit($companyId, $threshold = 0.8) {
+        $today = new DateTime();
+        $dayOfWeek = $today->format('N'); // 1 (para Lunes) a 7 (para Domingo)
+        $startDate = clone $today;
+        $startDate->modify('-' . ($dayOfWeek - 1) . ' days');
+        $endDate = clone $startDate;
+        $endDate->modify('+6 days');
+
+        $sql = "SELECT 
+                    u.id, 
+                    u.full_name, 
+                    u.profile_picture, 
+                    u.weekly_hour_limit, 
+                    SUM(
+                        CASE
+                            WHEN es.start_time IS NOT NULL AND es.end_time IS NOT NULL
+                                THEN TIME_TO_SEC(TIMEDIFF(es.end_time, es.start_time))
+                            WHEN str.shift_id IS NOT NULL
+                                THEN TIME_TO_SEC(TIMEDIFF(str.last_end, str.first_start))
+                            ELSE 0
+                        END
+                    ) / 3600 AS hours_worked
+                FROM employee_schedules es
+                JOIN users u ON es.user_id = u.id
+                LEFT JOIN (
+                    SELECT shift_id,
+                           MIN(start_time) AS first_start,
+                           MAX(end_time) AS last_end
+                    FROM shift_time_ranges
+                    GROUP BY shift_id
+                ) str ON str.shift_id = es.shift_id
+                WHERE u.company_id = :p_company_id
+                AND es.schedule_date BETWEEN :start_date AND :end_date
+                AND u.weekly_hour_limit > 0
+                AND (
+                    (es.start_time IS NOT NULL AND es.end_time IS NOT NULL)
+                    OR str.shift_id IS NOT NULL
+                )
+                GROUP BY u.id, u.full_name, u.profile_picture, u.weekly_hour_limit
+                HAVING hours_worked >= (u.weekly_hour_limit * :threshold)";
+
+        $this->db->query($sql);
+        $this->db->bind(':p_company_id', $companyId);
+        $this->db->bind(':start_date', $startDate->format('Y-m-d'));
+        $this->db->bind(':end_date', $endDate->format('Y-m-d'));
+        $this->db->bind(':threshold', $threshold);
+
+        return $this->db->resultSet();
+    }
+
+    /**
+     * Convierte filas de employee_schedules al formato de saveDaySchedule.
+     */
+    public function entriesToPlannerArrays($rows) {
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'type' => $row->type ?? 'shift',
+                'shift_id' => !empty($row->shift_id) ? (int)$row->shift_id : null,
+                'start_time' => $row->start_time ?? null,
+                'end_time' => $row->end_time ?? null,
+                'notes' => $row->notes ?? null,
+            ];
+        }
+        return $out;
+    }
+
+    public function dayHasScheduleEntries($userId, $date) {
+        $this->db->query('SELECT 1 FROM employee_schedules WHERE user_id = :uid AND schedule_date = :d LIMIT 1');
+        $this->db->bind(':uid', (int)$userId);
+        $this->db->bind(':d', $date);
+        $this->db->single();
+        return $this->db->rowCount() > 0;
+    }
+
+    /**
+     * Copia el patrón de la semana de referencia (Lun–Dom) a cada fecha del rango [from, to].
+     * @return array{ok:bool,message:string,schedules:array,days_updated:int}
+     */
+    public function buildWeekPatternApplyPayload($userId, $refWeekStart, $from, $to, $overwrite = true) {
+        $userId = (int)$userId;
+        if ($userId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $refWeekStart)
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            return ['ok' => false, 'message' => 'Fechas o usuario inválidos.', 'schedules' => [], 'days_updated' => 0];
+        }
+        if ($from > $to) {
+            $tmp = $from;
+            $from = $to;
+            $to = $tmp;
+        }
+        $daysSpan = (int)((strtotime($to) - strtotime($from)) / 86400) + 1;
+        if ($daysSpan > 93) {
+            return ['ok' => false, 'message' => 'El rango no puede superar 93 días.', 'schedules' => [], 'days_updated' => 0];
+        }
+
+        $byDow = [];
+        for ($i = 0; $i < 7; $i++) {
+            $d = date('Y-m-d', strtotime($refWeekStart . " +{$i} days"));
+            $dow = (int)date('N', strtotime($d));
+            $rows = $this->getPlannerEntriesForUserOnDate($userId, $d);
+            $byDow[$dow] = $this->entriesToPlannerArrays($rows);
+        }
+
+        $userSchedules = [];
+        $daysUpdated = 0;
+        $cursor = $from;
+        while ($cursor <= $to) {
+            $dow = (int)date('N', strtotime($cursor));
+            $pattern = $byDow[$dow] ?? [];
+            if (!$overwrite && $this->dayHasScheduleEntries($userId, $cursor)) {
+                $cursor = date('Y-m-d', strtotime($cursor . ' +1 day'));
+                continue;
+            }
+            $userSchedules[$cursor] = $pattern;
+            $daysUpdated++;
+            $cursor = date('Y-m-d', strtotime($cursor . ' +1 day'));
+        }
+
+        if ($daysUpdated === 0) {
+            return ['ok' => false, 'message' => 'No hay días para actualizar (activá sobrescribir o ampliá el rango).', 'schedules' => [], 'days_updated' => 0];
+        }
+
+        return [
+            'ok' => true,
+            'message' => '',
+            'schedules' => [$userId => $userSchedules],
+            'days_updated' => $daysUpdated,
+        ];
+    }
 
 }
 ?>

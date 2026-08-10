@@ -6,7 +6,9 @@
 // ----------------------------------------------------------------------
 
 require APPROOT . '/views/inc/header.php'; 
-$request = $data['request'];
+$viewData = $data ?? [];
+$request = $viewData['request'] ?? null;
+$requestTypes = $viewData['requestTypes'] ?? [];
 ?>
 
 <div class="row justify-content-center">
@@ -20,16 +22,17 @@ $request = $data['request'];
             </div>
             <div class="card-body">
                 <form action="<?php echo URLROOT; ?>/admin/editRequest/<?php echo $request->id; ?>" method="post">
+                    <?php echo csrf_field(); ?>
                     <div class="mb-3">
                         <label>Empleado:</label>
-                        <p class="form-control-plaintext"><strong><?php /* Necesitaríamos pasar el nombre del empleado aquí */ ?></strong></p>
+                        <p class="form-control-plaintext"><strong><?php echo htmlspecialchars($request->full_name ?? ''); ?></strong></p>
                     </div>
                     <div class="mb-3">
                         <label for="request_type_id" class="form-label">Tipo de Solicitud</label>
                         <select name="request_type_id" class="form-select" required>
-                            <?php foreach($data['requestTypes'] as $type): ?>
+                            <?php foreach($requestTypes as $type): ?>
                                 <option value="<?php echo $type->id; ?>" <?php echo ($type->id == $request->request_type_id) ? 'selected' : ''; ?>>
-                                    <?php echo $type->name; ?>
+                                    <?php echo htmlspecialchars($type->name); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>

@@ -11,7 +11,12 @@
                         <tr>
                             <td><?php echo date('d/m/Y', strtotime($holiday->holiday_date)); ?></td>
                             <td><?php echo htmlspecialchars($holiday->name); ?></td>
-                            <td><a href="<?php echo URLROOT; ?>/admin/deleteHoliday/<?php echo $holiday->id; ?>" class="btn btn-sm btn-danger">Eliminar</a></td>
+                            <td>
+                                <form method="post" action="<?php echo URLROOT; ?>/admin/deleteHoliday/<?php echo $holiday->id; ?>" class="d-inline" onsubmit="return confirm('¿Eliminar este feriado?');">
+                                    <?php echo csrf_field(); ?>
+                                    <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                                </form>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -24,6 +29,7 @@
             <div class="card-header"><h5 class="mb-0">Añadir Feriado</h5></div>
             <div class="card-body">
                 <form action="<?php echo URLROOT; ?>/admin/holidays" method="post">
+                    <?php echo csrf_field(); ?>
                     <div class="mb-3">
                         <label class="form-label">Nombre del Feriado</label>
                         <input type="text" name="name" class="form-control" required>

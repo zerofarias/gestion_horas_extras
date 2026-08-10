@@ -15,7 +15,7 @@ class Database {
     private $error;
 
     public function __construct(){
-        $dsn = 'mysql:host=' . $this->host . ';dbname=' . $this->dbname;
+        $dsn = 'mysql:host=' . $this->host . ';dbname=' . $this->dbname . ';charset=utf8mb4';
         $options = array(
             PDO::ATTR_PERSISTENT => true,
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
@@ -23,6 +23,7 @@ class Database {
 
         try{
             $this->dbh = new PDO($dsn, $this->user, $this->pass, $options);
+            $this->dbh->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
         } catch(PDOException $e){
             $this->error = $e->getMessage();
             die('Error de Conexión: ' . $this->error);
@@ -88,8 +89,14 @@ class Database {
         return $this->dbh->commit();
     }
 
+    public function inTransaction(){
+        return $this->dbh->inTransaction();
+    }
+
     public function rollBack(){
-        return $this->dbh->rollBack();
+        if ($this->dbh->inTransaction()) {
+            return $this->dbh->rollBack();
+        }
+        return false;
     }
 }
-?>

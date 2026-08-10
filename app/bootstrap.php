@@ -11,6 +11,40 @@ require_once 'config/config.php';
 // 2. Cargar Helpers
 // Contiene funciones de ayuda globales, como redirect() y manejo de sesión.
 require_once 'helpers/session_helper.php';
+require_once 'helpers/encoding_helper.php';
+require_once 'helpers/marcaciones_helper.php';
+require_once 'helpers/attendance_helper.php';
+require_once 'helpers/avatar_helper.php';
+require_once 'helpers/auth_helper.php';
+require_once 'helpers/calendar_events_helper.php';
+require_once 'helpers/name_helper.php';
+require_once 'helpers/learning_helper.php';
+require_once 'helpers/overtime_helper.php';
+require_once 'helpers/overtime_visibility_helper.php';
+require_once 'helpers/notifications_helper.php';
+require_once 'helpers/uploads_security_helper.php';
+require_once 'helpers/incidents_helper.php';
+require_once 'helpers/vacation_helper.php';
+require_once 'helpers/peer_stars_helper.php';
+require_once 'helpers/surveys_helper.php';
+require_once 'helpers/prode_helper.php';
+require_once 'helpers/prode_fixture_helper.php';
+require_once 'helpers/cp_tasks_helper.php';
+require_once 'helpers/cp_visibility_helper.php';
+require_once 'helpers/company_brand_helper.php';
+require_once 'helpers/system_settings_helper.php';
+require_once 'helpers/employee_portal_helper.php';
+require_once 'helpers/salary_advance_helper.php';
+
+$composerAutoload = dirname(__DIR__) . '/vendor/autoload.php';
+if (file_exists($composerAutoload)) {
+    require_once $composerAutoload;
+}
+
+require_once 'services/LearningAssignmentService.php';
+require_once 'services/NotificationTargetService.php';
+require_once 'services/AnnouncementDisplayService.php';
+require_once 'services/MailService.php';
 
 // 3. Autoload de Clases (Core, Controladores y Modelos)
 // Esta función se ejecuta automáticamente cuando se intenta usar una clase
@@ -22,7 +56,8 @@ spl_autoload_register(function($className){
     $paths = [
         '../app/controllers/' . $className . '.php',
         '../app/models/' . $className . '.php',
-        '../app/' . $className . '.php' // Para clases en la raíz de 'app', como Core.php
+        '../app/services/' . $className . '.php',
+        '../app/' . $className . '.php'
     ];
 
     // Recorre las rutas y, si encuentra el archivo, lo incluye
@@ -34,3 +69,10 @@ spl_autoload_register(function($className){
         }
     }
 });
+
+require_once 'models/SystemSetting.php';
+require_once 'services/SystemSettingsService.php';
+
+if (function_exists('uploads_protect_sensitive_paths')) {
+    uploads_protect_sensitive_paths();
+}

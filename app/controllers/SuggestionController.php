@@ -1,16 +1,12 @@
 <?php
-// ----------------------------------------------------------------------
-// ARCHIVO 4: app/controllers/SuggestionController.php (NUEVO ARCHIVO)
-// Este nuevo controlador manejará las sugerencias del lado del empleado.
-// Debes CREAR este archivo en la ruta app/controllers/.
-// ----------------------------------------------------------------------
 
 class SuggestionController {
     private $suggestionModel;
     private $userModel;
 
     public function __construct(){
-        if(!isLoggedIn()){ redirect('login'); }
+        requireEmployeeRole();
+        require_employee_portal_feature('suggestions');
         $this->suggestionModel = new Suggestion();
         $this->userModel = new User();
     }
@@ -21,33 +17,34 @@ class SuggestionController {
 
     public function submit(){
         if($_SERVER['REQUEST_METHOD'] == 'POST'){
-            $_POST = filter_input_array(INPUT_POST, FILTER_SANITIZE_STRING);
-            
-            // Obtenemos la empresa del usuario actual para asociar la sugerencia
+            csrf_verify();
+
             $user = $this->userModel->getUserById($_SESSION['user_id']);
+            if (!$user || empty($user->company_id)) {
+                $_SESSION['flash_error'] = 'Tu usuario no tiene empresa asignada. No se puede enviar la sugerencia.';
+                redirect('suggestion/index');
+            }
 
             $data = [
                 'company_id' => $user->company_id,
-                'suggestion_text' => trim($_POST['suggestion_text'])
+                'suggestion_text' => postString('suggestion_text'),
             ];
 
-            if(!empty($data['suggestion_text'])){
-                if($this->suggestionModel->createSuggestion($data)){
-                    $_SESSION['flash_success'] = '¡Gracias! Tu sugerencia ha sido enviada de forma anónima.';
+            if($data['suggestion_text'] !== ''){
+                if($this->suggestionModel->addSuggestion($data)){
+                    $_SESSION['flash_success'] = '¡Gracias! Tu sugerencia ha sido enviada.';
                     redirect('suggestion/index');
-                } else {
-                    die('Algo salió mal.');
                 }
-            } else {
-                $_SESSION['flash_error'] = 'Por favor, escribe una sugerencia.';
+                $_SESSION['flash_error'] = 'No se pudo guardar la sugerencia.';
                 redirect('suggestion/index');
             }
-        } else {
+            $_SESSION['flash_error'] = 'Por favor, escribe una sugerencia.';
             redirect('suggestion/index');
         }
+        redirect('suggestion/index');
     }
 
-    public function view($view, $data = []){
+    private function view($view, $data = []){
         if(file_exists('../app/views/' . $view . '.php')){
             require_once '../app/views/' . $view . '.php';
         } else {
@@ -55,4 +52,3 @@ class SuggestionController {
         }
     }
 }
-?>

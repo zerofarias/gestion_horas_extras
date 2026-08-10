@@ -21,7 +21,10 @@ class LoginController {
     public function index($data = []){
         // Si el usuario ya está logueado, lo redirige a su panel correspondiente.
         if (isLoggedIn()) {
-            redirect(hasRole('admin') ? 'admin/dashboard' : 'employee/dashboard');
+            if (isStaffAdmin()) {
+                redirect('admin/dashboard');
+            }
+            redirect('employee/index');
         }
         
         // Carga la vista del formulario de login.
@@ -34,9 +37,8 @@ class LoginController {
     public function process(){
         // Se asegura de que la solicitud sea de tipo POST.
         if($_SERVER['REQUEST_METHOD'] == 'POST'){
-            $_POST = filter_input_array(INPUT_POST, FILTER_SANITIZE_STRING);
-            
-            $loginData = trim($_POST['login_data']);
+            csrf_verify();
+            $loginData = postString('login_data');
             $data = [
                 'login_data' => $loginData,
                 'error' => ''
@@ -61,15 +63,18 @@ class LoginController {
                     $data['error'] = 'Este usuario ha sido desactivado.';
                     $this->index($data);
                 } else {
-                    // Si el login es exitoso, crea la sesión.
+                    // Si el login es exitoso, registra acceso y crea la sesión.
+                    (new UserLoginLog())->log((int)$loggedInUser->id);
                     $this->createUserSession($loggedInUser);
                 }
-            } else {
+            }
+            else {
                 // Si las credenciales son incorrectas.
                 $data['error'] = 'Usuario o Contraseña incorrectos.';
                 $this->index($data);
             }
-        } else {
+        }
+        else {
             // Si se accede directamente a la URL, redirige al login.
             redirect('login');
         }
@@ -79,20 +84,25 @@ class LoginController {
      * Crea las variables de sesión para el usuario que ha iniciado sesión.
      * @param object $user - El objeto de usuario con los datos de la base de datos.
      */
-    public function createUserSession($user){
+    private function createUserSession($user){
+        session_regenerate_id(true);
+        if (function_exists('csrf_regenerate')) {
+            csrf_regenerate();
+        }
         $_SESSION['user_id'] = $user->id;
         $_SESSION['user_username'] = $user->username;
         $_SESSION['user_full_name'] = $user->full_name;
         $_SESSION['user_role'] = $user->role;
-        
-        // --- INICIO DE CAMBIO ---
-        if($user->role == 'admin'){
+        $_SESSION['user_company_id'] = $user->company_id;
+        $_SESSION['user_area_id'] = !empty($user->area_id) ? (int)$user->area_id : null;
+        $companyModel = new Company();
+        $_SESSION['user_company_name'] = $companyModel->getNameById($user->company_id);
+        $_SESSION['user_profile_picture'] = $user->profile_picture ?? 'default.png';
+
+        if ($user->role === 'admin' || $user->role === 'supervisor') {
             redirect('admin/dashboard');
-        } else {
-            // Los empleados ahora son redirigidos a su nuevo menú principal.
-            redirect('employee/index');
         }
-        // --- FIN DE CAMBIO ---
+        redirect('employee/index');
     }
 
     /**
@@ -103,6 +113,9 @@ class LoginController {
         unset($_SESSION['user_username']);
         unset($_SESSION['user_full_name']); // Limpia el nombre completo de la sesión
         unset($_SESSION['user_role']);
+        unset($_SESSION['user_company_id']);
+        unset($_SESSION['user_company_name']);
+        unset($_SESSION['user_profile_picture']);
         session_destroy();
         redirect('login');
     }
@@ -112,7 +125,7 @@ class LoginController {
      * @param string $view - El nombre de la vista (ej. 'login/index').
      * @param array $data - Los datos a usar en la vista.
      */
-    public function view($view, $data = []){
+    private function view($view, $data = []){
         if(file_exists('../app/views/' . $view . '.php')){
             require_once '../app/views/' . $view . '.php';
         } else {

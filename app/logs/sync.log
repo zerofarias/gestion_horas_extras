@@ -1,46 +1,69 @@
-[2025-07-25 19:58:46] --- [INICIO] Sincronización Automática ---
-[2025-07-25 19:58:46] Buscando eventos entre: 2025-07-18T19:58:46-03:00 y 2025-07-25T19:58:46-03:00
-[2025-07-25 19:59:08] Respuesta del reloj recibida. Se encontraron 192 eventos en total.
-[2025-07-25 19:59:08] --- [FIN] Sincronización Automática ---
-[2025-07-25 20:02:20] --- [INICIO] Sincronización Automática ---
-[2025-07-25 20:02:20] Buscando eventos entre: 2025-07-18T20:02:20-03:00 y 2025-07-25T20:02:20-03:00
-[2025-07-25 20:02:42] Respuesta del reloj recibida. Se encontraron 192 eventos en total.
-[2025-07-25 20:02:42] --- [FIN] Sincronización Automática ---
-[2025-07-25 20:06:18] --- [INICIO] Sincronización Automática ---
-[2025-07-25 20:06:18] Buscando eventos entre: 2025-07-18T20:06:18-03:00 y 2025-07-25T20:06:18-03:00
-[2025-07-25 20:06:42] Respuesta del reloj recibida. Se encontraron 192 eventos en total.
-[2025-07-25 20:06:42] --- [FIN] Sincronización Automática ---
-[2025-07-25 20:09:08] --- [INICIO] Sincronización Automática ---
-[2025-07-25 20:09:08] Buscando eventos entre: 2025-07-22T20:09:08-03:00 y 2025-07-25T20:09:08-03:00
-[2025-07-25 20:09:20] Respuesta del reloj recibida. Se encontraron 101 eventos en total.
-[2025-07-25 20:09:20] Se limpiaron los registros existentes para 3 usuarios en las fechas afectadas.
-[2025-07-25 20:09:20] Se insertaron 101 eventos individuales en la tabla de auditoría.
-[2025-07-25 20:09:20] Procesamiento finalizado. Se guardaron los resúmenes diarios de 3 empleados.
-[2025-07-25 20:09:20] --- [FIN] Sincronización Automática ---
-[2025-07-25 20:13:05] --- [INICIO] Sincronización Automática ---
-[2025-07-25 20:13:05] Buscando eventos entre: 2025-07-22T20:13:05-03:00 y 2025-07-25T20:13:05-03:00
-[2025-07-25 20:13:17] Respuesta del reloj recibida. Se encontraron 101 eventos en total.
-[2025-07-25 20:13:17] Procesamiento de eventos individuales finalizado. Nuevos: 0. Duplicados ignorados: 20.
-[2025-07-25 20:13:17] --- [FIN] Sincronización Automática ---
-[2025-07-25 20:13:56] --- [INICIO] Sincronización Automática ---
-[2025-07-25 20:13:56] Buscando eventos entre: 2025-07-22T20:13:56-03:00 y 2025-07-25T20:13:56-03:00
-[2025-07-25 20:14:08] Respuesta del reloj recibida. Se encontraron 101 eventos en total.
-[2025-07-25 20:14:08] Procesamiento de eventos individuales finalizado. Nuevos: 0. Duplicados ignorados: 20.
-[2025-07-25 20:14:08] --- [FIN] Sincronización Automática ---
-[2025-07-25 20:14:52] --- [INICIO] Sincronización Automática ---
-[2025-07-25 20:14:52] Buscando eventos entre: 2025-06-25T20:14:52-03:00 y 2025-07-25T20:14:52-03:00
-[2025-07-25 20:16:44] Respuesta del reloj recibida. Se encontraron 842 eventos en total.
-[2025-07-25 20:16:44] Procesamiento de eventos individuales finalizado. Nuevos: 165. Duplicados ignorados: 0.
-[2025-07-25 20:16:44] Recalculando resúmenes diarios para los días afectados...
-[2025-07-25 20:16:44] Se recalcularon 61 resúmenes diarios.
-[2025-07-25 20:16:44] --- [FIN] Sincronización Automática ---
-[2025-07-26 13:55:06] --- [INICIO] Sincronización Automática ---
-[2025-07-26 13:55:06] Buscando eventos entre: 2025-06-26T13:55:06-03:00 y 2025-07-26T13:55:06-03:00
-[2025-07-26 13:57:06] Respuesta del reloj recibida. Se encontraron 840 eventos en total.
-[2025-07-26 13:57:06] Procesamiento de eventos individuales finalizado. Nuevos: 4. Duplicados ignorados: 163.
-[2025-07-26 13:57:06] Recalculando resúmenes diarios para los días afectados...
-[2025-07-26 13:57:06] Se recalcularon 3 resúmenes diarios.
-[2025-07-26 13:57:06] --- [FIN] Sincronización Automática ---
-[2025-07-26 13:59:16] --- [INICIO] Sincronización Automática ---
-[2025-07-26 13:59:16] Buscando eventos entre: 2025-06-26T13:59:16-03:00 y 2025-07-26T13:59:16-03:00
-[2025-07-26 13:59:37] ERROR: No se pudo conectar con el reloj (Código HTTP: 0).
+
+[2025-07-28 18:58:57] Respuesta del reloj recibida. Se encontraron 802 eventos en total.
+[2025-07-28 19:00:05] --- [INICIO] Sincronización Automática ---
+[2025-07-28 19:00:05] Buscando eventos entre: 2025-06-28T19:00:05-03:00 y 2025-07-28T19:00:05-03:00
+[2025-07-28 19:02:12] Respuesta del reloj recibida. Se encontraron 803 eventos en total.
+[2025-07-28 19:16:31] --- [INICIO] Sincronización Automática ---
+[2025-07-28 19:16:31] Buscando eventos entre: 2025-06-28T19:16:31-03:00 y 2025-07-28T19:16:31-03:00
+[2025-07-28 19:16:35] ERROR: No se pudo conectar con el reloj (Código HTTP: 0).
+[2025-07-28 19:22:24] --- [INICIO] Sincronización Automática ---
+[2025-07-28 19:22:24] Buscando eventos entre: 2025-06-28T19:22:24-03:00 y 2025-07-28T19:22:24-03:00
+[2025-07-28 19:22:28] ERROR: No se pudo conectar con el reloj (Código HTTP: 0).
+[2025-07-28 19:22:34] --- [INICIO] Sincronización Automática ---
+[2025-07-28 19:22:34] Buscando eventos entre: 2025-06-28T19:22:34-03:00 y 2025-07-28T19:22:34-03:00
+[2025-07-28 19:22:38] ERROR: No se pudo conectar con el reloj (Código HTTP: 0).
+[2025-07-28 19:23:02] --- [INICIO] Sincronización Automática ---
+[2025-07-28 19:23:02] Buscando eventos entre: 2025-06-28T19:23:02-03:00 y 2025-07-28T19:23:02-03:00
+[2025-07-28 19:23:05] ERROR: No se pudo conectar con el reloj (Código HTTP: 0).
+[2025-07-28 19:23:35] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 19:32:13] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 19:32:48] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 19:37:26] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 19:38:11] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 19:38:11] Iniciando sincronización para Hikvision: Hikvision Principal (192.168.1.201)
+[2025-07-28 19:38:33] ERROR: Falló la conexión con Hikvision Principal (Código HTTP: 0).
+[2025-07-28 19:38:33] Iniciando sincronización para Hikvision: Hikvision Depósito (192.168.1.202)
+[2025-07-28 19:38:54] ERROR: Falló la conexión con Hikvision Depósito (Código HTTP: 0).
+[2025-07-28 19:38:54] Iniciando sincronización para Anviz: Anviz Oficina
+[2025-07-28 19:38:54] ERROR: No se encontró la base de datos de Anviz en: C:/Program Files (x86)/Anviz/CrossChex/CrossChex.db
+[2025-07-28 19:38:54] Descarga de todos los relojes completa. Total de eventos a procesar: 0
+[2025-07-28 19:38:54] No hay eventos nuevos para procesar.
+[2025-07-28 19:38:54] --- [FIN] Sincronización Automática ---
+[2025-07-28 19:39:30] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 19:39:30] Iniciando sincronización para Hikvision: Hikvision SS (10.0.0.163)
+[2025-07-28 19:39:34] Finalizada sincronización para Hikvision SS. Eventos encontrados: 35
+[2025-07-28 19:39:34] Iniciando sincronización para Hikvision: Hikvision Depósito (10.10.4.44)
+[2025-07-28 19:39:55] ERROR: Falló la conexión con Hikvision Depósito (Código HTTP: 0).
+[2025-07-28 19:39:55] Iniciando sincronización para Anviz: Anviz Oficina
+[2025-07-28 19:39:55] ERROR: No se encontró la base de datos de Anviz en: C:/Program Files (x86)/Anviz/CrossChex/CrossChex.db
+[2025-07-28 19:39:55] Descarga de todos los relojes completa. Total de eventos a procesar: 35
+[2025-07-28 19:39:55] ADVERTENCIA: Se ignoraron eventos de IDs de reloj no registrados: 15, 7, 19, 21, 3, 14, 6, 16, 2, 17, 12, 9, 4
+[2025-07-28 19:39:55] ERROR CRÍTICO DURANTE EL GUARDADO: Se revirtieron todos los cambios. Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'paviotti_lanaturaleza.raw_clockings' doesn't exist
+[2025-07-28 19:39:55] --- [FIN] Sincronización Automática ---
+[2025-07-28 20:03:37] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 20:03:37] Iniciando sincronización para Hikvision: Hikvision SS (10.0.0.163)
+[2025-07-28 20:03:42] Finalizada sincronización para Hikvision SS. Eventos encontrados: 36
+[2025-07-28 20:03:42] Iniciando sincronización para Hikvision: Hikvision Depósito (10.10.4.44)
+[2025-07-28 20:04:03] ERROR: Falló la conexión con Hikvision Depósito (Código HTTP: 0).
+[2025-07-28 20:04:03] Iniciando sincronización para Anviz: Anviz Oficina
+[2025-07-28 20:04:03] ERROR: No se encontró la base de datos de Anviz en: C:/Program Files (x86)/Anviz/CrossChex/CrossChex.db
+[2025-07-28 20:04:03] Descarga de todos los relojes completa. Total de eventos a procesar: 36
+[2025-07-28 20:04:03] ADVERTENCIA: Se ignoraron eventos de IDs de reloj no registrados: 15, 7, 19, 21, 3, 14, 6, 16, 2, 17, 12, 9, 4
+[2025-07-28 20:11:14] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 20:11:14] Iniciando sincronización para Hikvision: Hikvision SS (10.0.0.163)
+[2025-07-28 20:11:19] Finalizada sincronización para Hikvision SS. Eventos encontrados: 36
+[2025-07-28 20:11:19] Iniciando sincronización para Hikvision: Hikvision Depósito (10.10.4.44)
+[2025-07-28 20:11:41] ERROR: Falló la conexión con Hikvision Depósito (Código HTTP: 0).
+[2025-07-28 20:11:41] Iniciando sincronización para Anviz: Anviz Oficina
+[2025-07-28 20:11:41] ERROR: No se encontró la base de datos de Anviz en: C:/Program Files (x86)/Anviz/CrossChex/CrossChex.db
+[2025-07-28 20:11:41] Descarga de todos los relojes completa. Total de eventos a procesar: 36
+[2025-07-28 20:11:41] ADVERTENCIA: Se ignoraron eventos de IDs de reloj no registrados: 15, 7, 19, 21, 3, 14, 6, 16, 2, 17, 12, 9, 4
+[2025-07-28 20:22:09] --- [INICIO] Sincronización Automática de Marcaciones ---
+[2025-07-28 20:22:09] Iniciando sincronización para Hikvision: Hikvision SS (10.0.0.163)
+[2025-07-28 20:22:40] Finalizada sincronización para Hikvision SS. Eventos encontrados: 267
+[2025-07-28 20:22:40] Iniciando sincronización para Hikvision: Hikvision Depósito (10.10.4.44)
+[2025-07-28 20:23:01] ERROR: Falló la conexión con Hikvision Depósito (Código HTTP: 0).
+[2025-07-28 20:23:01] Iniciando sincronización para Anviz: Anviz Oficina
+[2025-07-28 20:23:01] ERROR: No se encontró la base de datos de Anviz en: C:/Program Files (x86)/Anviz/CrossChex/CrossChex.db
+[2025-07-28 20:23:01] Descarga de todos los relojes completa. Total de eventos a procesar: 267
+[2025-07-28 20:23:01] ADVERTENCIA: Se ignoraron eventos de IDs de reloj no registrados: 3, 21, 15, 19, 6, 12, 9, 17, 2, 4, 14, 7, 16

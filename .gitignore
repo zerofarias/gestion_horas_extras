@@ -1,0 +1,48 @@
+# === Dependencias ===
+/vendor/
+
+# === Configuración local con credenciales (NO versionar) ===
+app/config/config.local.php
+app/config/mail.local.php
+
+# === Seeds con datos reales / sensibles ===
+seed_mail_paviotti.sql
+
+# === Uploads de usuarios (archivos binarios, no van en git) ===
+public/uploads/avatars/*
+public/uploads/pay_stubs/*
+public/uploads/pay_stub_signatures/*
+public/uploads/justifications/*
+public/uploads/request_certificates/*
+public/uploads/employee_incidents/*
+public/uploads/announcements/*
+public/uploads/courses/*
+# Mantener la estructura de carpetas
+!public/uploads/avatars/.gitkeep
+!public/uploads/pay_stubs/.gitkeep
+!public/uploads/pay_stub_signatures/.gitkeep
+!public/uploads/justifications/.gitkeep
+!public/uploads/request_certificates/.gitkeep
+!public/uploads/employee_incidents/.gitkeep
+!public/uploads/announcements/.gitkeep
+!public/uploads/courses/.gitkeep
+
+# === IDE y editor ===
+.cursor/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# === Sistema operativo ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Logs ===
+*.log
+/logs/
+
+# === Archivos temporales de Google Drive ===
+.tmp.driveupload/
+.tmp.drivedownload/

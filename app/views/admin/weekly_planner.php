@@ -1,299 +1,996 @@
 <?php 
 require APPROOT . '/views/inc/header.php'; 
 
-function generateEntryHtml($userId, $date, $index, $entry, $shifts) {
+/**
+ * Renderiza un chip de horario (entrada existente cargada desde la BD).
+ * Se usa SOLO para entradas pre-existentes; las nuevas se crean via JS.
+ */
+function renderChip($userId, $date, $index, $entry, $shifts, $readOnly = false) {
+    $type      = $entry ? $entry->type : 'shift';
+    $color     = '#6c757d';
+    $viewLabel = 'Turno';
+    $viewTime  = '';
+    $selectedShift = $entry ? (int)$entry->shift_id : 0;
+    $startTime = ($entry && $entry->start_time) ? $entry->start_time : '';
+    $endTime   = ($entry && $entry->end_time)   ? $entry->end_time   : '';
+    $notes     = ($entry && $entry->notes)       ? $entry->notes      : '';
+
+    if ($type === 'shift') {
+        $color     = ($entry && !empty($entry->color))      ? $entry->color      : '#6c757d';
+        $viewLabel = ($entry && !empty($entry->shift_name)) ? $entry->shift_name : 'Turno';
+    } elseif ($type === 'overtime') {
+        $color     = '#e67e22';
+        $viewLabel = 'Horas Extras';
+    } elseif ($type === 'vacation') {
+        $color     = '#0ea5e9';
+        $viewLabel = 'VACACIONES';
+    } elseif ($type === 'leave') {
+        $color     = '#a855f7';
+        $viewLabel = 'Licencia';
+    } else {
+        $color     = '#8b5cf6';
+        $viewLabel = 'Personalizado';
+    }
+    if ($startTime && $endTime) {
+        $viewTime = substr($startTime, 0, 5) . ' - ' . substr($endTime, 0, 5);
+    }
+
+    $showSel  = ($type !== 'shift') ? ' style="display:none;"' : '';
+    $showTime = in_array($type, ['shift', 'vacation', 'leave'], true) ? ' style="display:none;"' : '';
+    $prefix   = 'schedules[' . $userId . '][' . $date . '][' . $index . ']';
+
+    $shiftOptions = '';
+    if (!empty($shifts)) {
+        foreach ($shifts as $s) {
+            $sel  = ((int)$s->id === $selectedShift) ? ' selected' : '';
+            $c    = htmlspecialchars($s->color ?? '#6c757d');
+            $shiftOptions .= '<option value="' . $s->id . '" data-color="' . $c . '"' . $sel . '>'
+                           . htmlspecialchars($s->shift_name) . '</option>';
+        }
+    }
+
     ob_start();
-    $type = $entry ? $entry->type : 'shift';
-    $color = '#6c757d';
-    if ($type == 'shift' && $entry && !empty($entry->color)) { $color = $entry->color; } 
-    elseif ($type == 'overtime') { $color = '#ffc107'; }
-?>
-<div class="schedule-entry type-<?php echo $type; ?>" style="border-left-color: <?php echo htmlspecialchars($color); ?>;">
-    <input type="hidden" name="schedules[<?php echo $userId; ?>][<?php echo $date; ?>][<?php echo $index; ?>][type]" value="<?php echo $type; ?>">
-    <button type="button" class="btn-close" aria-label="Close" onclick="this.parentElement.remove()"></button>
-    <div class="shift-selector" style="<?php echo ($type != 'shift') ? 'display:none;' : ''; ?>">
-        <select class="form-select form-select-sm" name="schedules[<?php echo $userId; ?>][<?php echo $date; ?>][<?php echo $index; ?>][shift_id]">
-            <?php if (!empty($shifts)): foreach($shifts as $s): ?>
-            <option value="<?php echo $s->id; ?>" <?php echo ($entry && $entry->shift_id == $s->id) ? 'selected' : ''; ?>><?php echo htmlspecialchars($s->shift_name); ?></option>
-            <?php endforeach; endif; ?>
-        </select>
+    ?>
+<div class="entry-chip type-<?php echo htmlspecialchars($type); ?><?php echo $readOnly ? ' chip-readonly' : ''; ?>"
+     draggable="<?php echo $readOnly ? 'false' : 'true'; ?>"
+     data-type="<?php echo htmlspecialchars($type); ?>"
+     <?php if ($readOnly): ?>data-readonly="1"<?php endif; ?>
+     style="--chip-color:<?php echo htmlspecialchars($color); ?>;">
+    <?php if (!$readOnly): ?>
+    <div class="chip-drag-handle" title="Arrastrar"><i class="fas fa-grip-vertical"></i></div>
+    <?php else: ?>
+    <div class="chip-drag-handle text-muted" title="Solo lectura — horas extras deshabilitadas"><i class="fas fa-lock"></i></div>
+    <?php endif; ?>
+    <div class="chip-body">
+        <div class="chip-view">
+            <span class="chip-dot"></span>
+            <span class="chip-name"><?php echo htmlspecialchars($viewLabel); ?></span>
+            <?php if ($viewTime): ?><span class="chip-time"><?php echo htmlspecialchars($viewTime); ?></span><?php endif; ?>
+            <?php if ($notes): ?><span class="chip-note-icon" title="<?php echo htmlspecialchars($notes); ?>"><i class="fas fa-comment-alt"></i></span><?php endif; ?>
+            <?php if ($readOnly): ?><span class="badge bg-secondary ms-1" style="font-size:.6rem;">solo lectura</span><?php endif; ?>
+        </div>
+        <?php if ($readOnly): ?>
+        <input type="hidden" name="<?php echo $prefix; ?>[type]" value="<?php echo htmlspecialchars($type); ?>">
+        <input type="hidden" name="<?php echo $prefix; ?>[shift_id]" value="<?php echo (int)$selectedShift; ?>">
+        <input type="hidden" name="<?php echo $prefix; ?>[start_time]" value="<?php echo htmlspecialchars($startTime); ?>">
+        <input type="hidden" name="<?php echo $prefix; ?>[end_time]" value="<?php echo htmlspecialchars($endTime); ?>">
+        <input type="hidden" name="<?php echo $prefix; ?>[notes]" value="<?php echo htmlspecialchars($notes); ?>">
+        <?php else: ?>
+        <div class="chip-controls">
+            <input type="hidden" name="<?php echo $prefix; ?>[type]" value="<?php echo htmlspecialchars($type); ?>">
+            <div class="chip-selector"<?php echo $showSel; ?>>
+                <select class="form-select form-select-sm"
+                        name="<?php echo $prefix; ?>[shift_id]"
+                        onchange="updateChipFromSelect(this)">
+                    <?php echo $shiftOptions; ?>
+                </select>
+            </div>
+            <div class="chip-times"<?php echo $showTime; ?>>
+                <div class="d-flex gap-1 align-items-center mt-1">
+                    <input type="time" class="form-control form-control-sm"
+                           name="<?php echo $prefix; ?>[start_time]"
+                           value="<?php echo htmlspecialchars($startTime); ?>">
+                          <span class="text-muted small">-</span>
+                    <input type="time" class="form-control form-control-sm"
+                           name="<?php echo $prefix; ?>[end_time]"
+                           value="<?php echo htmlspecialchars($endTime); ?>">
+                </div>
+            </div>
+            <input type="text" class="form-control form-control-sm mt-1"
+                   name="<?php echo $prefix; ?>[notes]"
+                   placeholder="Nota (opcional)..."
+                   value="<?php echo htmlspecialchars($notes); ?>">
+        </div>
+        <?php endif; ?>
     </div>
-    <div class="time-inputs" style="<?php echo ($type == 'shift') ? 'display:none;' : ''; ?>">
-        <input type="time" class="form-control form-control-sm" name="schedules[<?php echo $userId; ?>][<?php echo $date; ?>][<?php echo $index; ?>][start_time]" value="<?php echo $entry ? $entry->start_time : ''; ?>">
-        <input type="time" class="form-control form-control-sm mt-1" name="schedules[<?php echo $userId; ?>][<?php echo $date; ?>][<?php echo $index; ?>][end_time]" value="<?php echo $entry ? $entry->end_time : ''; ?>">
-    </div>
-    <input type="text" class="form-control form-control-sm mt-1" name="schedules[<?php echo $userId; ?>][<?php echo $date; ?>][<?php echo $index; ?>][notes]" placeholder="Notas..." value="<?php echo $entry ? htmlspecialchars($entry->notes) : ''; ?>">
+    <?php if (!$readOnly): ?>
+    <button type="button" class="btn-chip-remove" onclick="removeEntry(this)" title="Eliminar">
+        <i class="fas fa-times"></i>
+    </button>
+    <?php endif; ?>
 </div>
-<?php return ob_get_clean(); } ?>
+    <?php
+    return ob_get_clean();
+}
+?>
 
 <style>
-    .planner-table th, .planner-table td { vertical-align: top; text-align: center; padding: 0.5rem !important; }
-    .planner-table .user-col { text-align: left; width: 230px; font-weight: 500; background-color: #f8f9fa; position: sticky; left: 0; z-index: 2; }
-    .planner-table thead th { position: sticky; top: 0; z-index: 3; background-color: #e9ecef; }
-    .is-holiday { background-color: #fff0f5 !important; }
-    .hours-summary .badge { margin-top: 5px; font-size: 0.9em; padding: 0.4em 0.7em; }
-    .request-badge { display: block; border-left: 5px solid; padding: 4px 8px; margin-bottom: 8px; border-radius: 5px; text-align: left; font-weight: 500; font-size: 0.8em; }
-    .schedule-block { padding: 6px 8px; margin-bottom: 5px; border-radius: 5px; text-align: left; color: #fff; font-weight: 500; font-size: 0.85em; }
-    .day-cell .entries-container { display: none; }
-    .day-cell.is-editing .entries-container { display: block; }
-    .day-cell.is-editing .blocks-container { display: none; }
-    .cell-actions { margin-top: 8px; position: relative; }
-    .btn-icon { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; padding: 0; margin: 0 3px; border: none; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.15); transition: all 0.2s ease; }
-    .btn-icon:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
-    .edit-btn { background-color: #0d6efd; }
-    .btn-success { background-color: #198754; }
-    .copy-btn { background-color: #6c757d; }
-    .add-entry-menu { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 10px; background: white; border-radius: 50px; z-index: 10; padding: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); gap: 5px; }
-    .add-entry-menu.is-active { display: flex; }
-    .planner-nav { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-    .date-picker-container { position: relative; }
-    #date-picker-icon { cursor: pointer; font-size: 1.5rem; color: #6c757d; }
-    #date-picker { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; width: 40px; height: 40px; cursor: pointer; }
-    .template-form { display: flex; gap: 10px; align-items: center; }
+/* â”€â”€ Shift palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.shift-palette {
+    display: flex; align-items: center; gap: .6rem;
+    padding: .55rem 1rem;
+    background: #fff;
+    border-radius: .7rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    flex-wrap: wrap;
+    margin-bottom: .75rem;
+}
+.palette-label {
+    font-size: .72rem; font-weight: 700; color: #6b7280;
+    text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; flex-shrink: 0;
+}
+.palette-sep { width: 1px; height: 22px; background: #e5e7eb; flex-shrink: 0; }
+.palette-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .28rem .75rem; border-radius: 20px;
+    color: #fff; font-size: .76rem; font-weight: 600;
+    cursor: grab; user-select: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,.18);
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s;
+    white-space: nowrap;
+}
+.palette-chip:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,.22); }
+.palette-chip:active { cursor: grabbing; transform: scale(.96); }
+.palette-chip.is-dragging { opacity: .45; }
+
+/* â”€â”€ Nav toolbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.planner-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: .5rem;
+    background: #fff; padding: .55rem 1rem;
+    border-radius: .7rem; box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    margin-bottom: .75rem;
+}
+.template-form { display: flex; gap: .5rem; align-items: center; }
+.date-picker-container { position: relative; }
+#date-picker-icon { cursor: pointer; font-size: 1.35rem; color: #6b7280; }
+#date-picker { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); opacity: 0; width: 40px; height: 40px; cursor: pointer; }
+
+/* â”€â”€ Table chrome â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.planner-table th, .planner-table td { vertical-align: top; padding: .4rem !important; }
+.planner-table thead th {
+    position: sticky; top: 0; z-index: 3;
+    background: #1a1d2e; color: #fff;
+    font-size: .78rem; font-weight: 600; text-align: center;
+    white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.18);
+}
+.planner-table thead th.is-holiday { background: #7c2d5a; }
+.planner-table thead th.user-col {
+    z-index: 5;
+    text-align: left;
+    background: #1a1d2e;
+    color: #fff;
+}
+.planner-table tbody .user-col {
+    text-align: left; min-width: 180px; max-width: 210px;
+    font-weight: 600; font-size: .81rem;
+    background: #f8f9fa;
+    position: sticky; left: 0; z-index: 2;
+    border-right: 2px solid #e5e7eb !important;
+}
+.planner-table-wrap {
+    position: relative;
+    overflow: auto;
+    max-height: calc(100vh - 250px);
+    overscroll-behavior: contain;
+}
+.planner-table-wrap .planner-table { min-width: 1100px; }
+.planner-table-wrap::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+.planner-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(107, 114, 128, .45);
+    border-radius: 999px;
+}
+@media (max-width: 991.98px) {
+    .planner-table-wrap { max-height: calc(100vh - 210px); }
+}
+.hours-summary { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.hours-summary .badge { font-size: .78rem; padding: .35em .65em; font-weight: 600; letter-spacing: .01em; }
+.day-cell.day-over-limit:not(.is-editing) {
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+    box-shadow: inset 0 0 0 2px #fb923c;
+}
+.day-cell.day-over-limit .entries-container {
+    border-radius: 6px;
+}
+
+/* â”€â”€ Day cell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.day-cell {
+    min-width: 128px; min-height: 72px;
+    position: relative; transition: background .12s ease;
+}
+.day-cell.is-holiday  { background: #fff0f5 !important; }
+.day-cell.is-editing  { background: #f0f7ff !important; outline: 2px dashed #3b82f6; outline-offset: -2px; }
+.day-cell.drag-over   { background: #dbeafe !important; outline: 2px dashed #2563eb; outline-offset: -2px; }
+.empty-label { color: #d1d5db; font-size: .73rem; font-style: italic; text-align: center; padding: .2rem 0 .3rem; }
+
+/* â”€â”€ Entry chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.entries-container { min-height: 4px; }
+.entry-chip {
+    display: flex; align-items: flex-start; gap: 3px;
+    border-radius: 6px; border-left: 4px solid var(--chip-color, #6c757d);
+    background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.09);
+    margin-bottom: 4px; font-size: .77rem; position: relative;
+    transition: box-shadow .12s ease;
+}
+.entry-chip.is-dragging { opacity: .4; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.entry-chip:not(.is-dragging):hover { box-shadow: 0 2px 8px rgba(0,0,0,.14); }
+
+/* drag handle: always in DOM but shown only when editing */
+.chip-drag-handle {
+    padding: 4px 2px 4px 4px; color: #d1d5db;
+    cursor: grab; font-size: .72rem; flex-shrink: 0;
+    display: none; align-items: center;
+}
+.day-cell.is-editing .chip-drag-handle { display: flex; }
+
+.chip-body { flex: 1; min-width: 0; padding: 4px 2px 4px 0; }
+
+/* â€” view mode (compact) â€” */
+.chip-view { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-height: 22px; padding: 1px 0; }
+.chip-dot  { width: 7px; height: 7px; border-radius: 50%; background: var(--chip-color, #6c757d); flex-shrink: 0; }
+.chip-name { font-weight: 700; color: #1e2235; line-height: 1.3; }
+.chip-time { font-size: .68rem; color: #6b7280; }
+.chip-note-icon { color: #9ca3af; font-size: .63rem; }
+
+/* â€” edit mode (controls) â€” */
+.chip-controls { display: none; padding-top: 3px; }
+.day-cell.is-editing .chip-view     { display: none; }
+.day-cell.is-editing .chip-controls { display: block; }
+
+/* delete button */
+.btn-chip-remove {
+    background: none; border: none; color: #d1d5db;
+    font-size: .68rem; padding: 4px 5px 0 0; cursor: pointer;
+    flex-shrink: 0; display: none; align-self: flex-start;
+}
+.day-cell.is-editing .btn-chip-remove { display: block; }
+.btn-chip-remove:hover { color: #ef4444; }
+
+/* â”€â”€ Cell action bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.cell-footer { margin-top: 5px; }
+.cell-actions { display: flex; justify-content: center; gap: 4px; }
+.btn-cell {
+    width: 26px; height: 26px; border-radius: 50%; border: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: .7rem; cursor: pointer; color: #fff;
+    transition: transform .12s ease, opacity .12s ease;
+}
+.btn-cell:hover  { transform: scale(1.15); }
+.btn-cell:active { transform: scale(.92); }
+.btn-cell-edit   { background: #3b82f6; }
+.btn-cell-save   { background: #10b981; }
+.btn-cell-copy   { background: #6b7280; }
+.btn-cell-cancel { background: #f59e0b; display: none; }
+.day-cell.is-editing .btn-cell-copy   { display: none !important; }
+.day-cell.is-editing .btn-cell-cancel { display: inline-flex !important; }
+
+/* add pills â€” visible only when editing */
+.add-pills { display: none; justify-content: center; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+.day-cell.is-editing .add-pills { display: flex; }
+.add-pill {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 2px 8px; border-radius: 12px; border: none;
+    font-size: .68rem; font-weight: 700; color: #fff; cursor: pointer;
+    transition: opacity .12s; opacity: .9;
+}
+.add-pill:hover { opacity: 1; }
+.add-pill-shift   { background: #3b82f6; }
+.add-pill-ot      { background: #e67e22; }
+.add-pill-custom  { background: #8b5cf6; }
+
+/* â”€â”€ Request badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.request-badge {
+    border-left: 4px solid; padding: 3px 6px; margin-bottom: 5px;
+    border-radius: 4px; text-align: left; font-weight: 600; font-size: .74rem;
+}
+
+/* â”€â”€ Save week footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.save-week-bar {
+    background: #fff; border-radius: .7rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    padding: .75rem 1.25rem;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: .5rem;
+    margin-top: .75rem;
+}
+.save-week-hint { font-size: .78rem; color: #6b7280; }
+.btn-save-week {
+    padding: .45rem 2rem; font-weight: 700; font-size: .9rem; border-radius: .45rem;
+}
+.entry-chip.chip-readonly {
+    opacity: .92;
+    border: 1px dashed rgba(0,0,0,.2);
+    cursor: default;
+}
+.entry-chip.chip-readonly .chip-drag-handle { cursor: not-allowed; }
 </style>
 
-<div class="planner-nav mb-3">
-    <a href="<?php echo URLROOT; ?>/admin/weeklyPlanner?week=<?php echo $data['prev_week_string']; ?>" class="btn btn-outline-secondary">&laquo; Semana Anterior</a>
-    
+<!-- â•â•â• PALETTE â•â•â• -->
+<div class="shift-palette">
+    <span class="palette-label"><i class="fas fa-grip-dots me-1"></i> Arrastr&aacute; a un d&iacute;a:</span>
+
+    <?php foreach($data['shifts'] as $s):
+        $pc = htmlspecialchars($s->color ?? '#6c757d');
+        $pt = htmlspecialchars($s->shift_name);
+        $hrs = '';
+        if ($s->total_hours > 0) $hrs = ' <small style="opacity:.75">(' . number_format($s->total_hours,1) . 'h)</small>';
+    ?>
+    <div class="palette-chip"
+         draggable="true"
+         data-type="shift"
+         data-shift-id="<?php echo $s->id; ?>"
+         data-shift-color="<?php echo $pc; ?>"
+         data-shift-name="<?php echo $pt; ?>"
+         style="background:<?php echo $pc; ?>;">
+        <i class="fas fa-tag" style="font-size:.65rem;"></i>
+        <?php echo $pt . $hrs; ?>
+    </div>
+    <?php endforeach; ?>
+
+    <?php if (!empty($data['shifts'])): ?>
+    <div class="palette-sep"></div>
+    <?php endif; ?>
+
+    <?php if (!empty($data['overtime_planner_enabled'])): ?>
+    <div class="palette-chip" draggable="true" data-type="overtime" style="background:#e67e22;">
+        <i class="fas fa-clock" style="font-size:.65rem;"></i> Horas Extra
+    </div>
+    <?php endif; ?>
+    <div class="palette-chip" draggable="true" data-type="custom" style="background:#8b5cf6;">
+        <i class="fas fa-user-clock" style="font-size:.65rem;"></i> Personalizado
+    </div>
+
+    <span class="ms-auto" style="font-size:.7rem;color:#9ca3af;">
+        <a href="javascript:location.reload()" style="color:#9ca3af;" title="Recarga para ver turnos nuevos"><i class="fas fa-sync-alt me-1"></i>Actualizar turnos</a>
+    </span>
+</div>
+
+<!-- â•â•â• NAV â•â•â• -->
+<div class="planner-nav">
+    <a href="<?php echo URLROOT; ?>/admin/weeklyPlanner?week=<?php echo $data['prev_week_string']; ?>"
+       class="btn btn-outline-secondary btn-sm">&laquo; Anterior</a>
+
     <form action="<?php echo URLROOT; ?>/admin/applyTemplate" method="post" class="template-form">
         <input type="hidden" name="target_week" value="<?php echo $data['current_week_string']; ?>">
+        <input type="hidden" name="csrf_token"   value="<?php echo csrf_token(); ?>">
         <select name="template_id" class="form-select form-select-sm" required>
-            <option value="" disabled selected>Aplicar Plantilla...</option>
-            <?php if(!empty($data['templates'])): ?>
-                <?php foreach($data['templates'] as $template): ?>
-                    <option value="<?php echo $template->id; ?>"><?php echo htmlspecialchars($template->template_name); ?></option>
-                <?php endforeach; ?>
-            <?php endif; ?>
+            <option value="" disabled selected>Aplicar plantilla...</option>
+            <?php if(!empty($data['templates'])): foreach($data['templates'] as $tpl): ?>
+                <option value="<?php echo $tpl->id; ?>"><?php echo htmlspecialchars($tpl->template_name); ?></option>
+            <?php endforeach; endif; ?>
         </select>
         <button type="submit" class="btn btn-sm btn-primary">Aplicar</button>
     </form>
-    
-    <div class="d-flex align-items-center">
+
+    <div class="d-flex align-items-center gap-2">
         <div class="date-picker-container">
-            <label for="date-picker" id="date-picker-icon" title="Seleccionar fecha"><i class="fas fa-calendar-alt"></i></label>
+            <label for="date-picker" id="date-picker-icon" title="Ir a fecha"><i class="fas fa-calendar-alt"></i></label>
             <input type="date" id="date-picker">
         </div>
-        <a href="<?php echo URLROOT; ?>/admin/weeklyPlanner?week=<?php echo $data['next_week_string']; ?>" class="btn btn-outline-secondary ms-2">Semana Siguiente &raquo;</a>
+        <a href="<?php echo URLROOT; ?>/admin/weeklyPlanner?week=<?php echo $data['next_week_string']; ?>"
+           class="btn btn-outline-secondary btn-sm">Siguiente &raquo;</a>
     </div>
 </div>
 
+<!-- â•â•â• PLANNER FORM â•â•â• -->
 <form id="planner-form" action="<?php echo URLROOT; ?>/admin/weeklyPlanner" method="post">
     <input type="hidden" name="current_week" value="<?php echo $data['current_week_string']; ?>">
-    <div class="card shadow">
+    <input type="hidden" name="csrf_token"   value="<?php echo csrf_token(); ?>">
+
+    <div class="card shadow-sm">
         <div class="card-body p-0">
-            <div class="table-responsive">
+            <div class="table-responsive planner-table-wrap">
                 <table class="table table-bordered planner-table mb-0">
-                    <thead class="table-light">
+                    <thead>
                         <tr>
                             <th class="user-col">Empleado / Horas</th>
-                            <?php foreach($data['week_dates'] as $day): ?>
-                                <th class="<?php echo isset($data['holidays'][$day['full_date']]) ? 'is-holiday' : ''; ?>"><?php echo $day['display']; ?></th>
+                            <?php foreach($data['week_dates'] as $day):
+                                $isHol = isset($data['holidays'][$day['full_date']]);
+                            ?>
+                            <th class="<?php echo $isHol ? 'is-holiday' : ''; ?>">
+                                <?php echo $day['display']; ?>
+                                <?php if($isHol): ?><div style="font-size:.62rem;opacity:.75;font-weight:400;">Feriado</div><?php endif; ?>
+                            </th>
                             <?php endforeach; ?>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach($data['users'] as $user): ?>
-                            <tr data-user-row-id="<?php echo $user->id; ?>">
-                                <td class="user-col">
-                                    <?php echo htmlspecialchars($user->full_name); ?>
-                                    <div class="hours-summary">
-                                        <?php
-                                            // --- LÓGICA DE ALERTA DE HORAS EXTRAS ---
-                                            $weekly_total = $data['weekly_totals'][$user->id];
-                                            $limit = $user->weekly_hour_limit;
-                                            $badge_class = 'bg-primary'; // Color por defecto
-                                            if ($limit > 0 && $weekly_total > $limit) {
-                                                $badge_class = 'bg-danger'; // Límite excedido
-                                            } elseif ($limit > 0 && $weekly_total > $limit * 0.9) {
-                                                $badge_class = 'bg-warning text-dark'; // Cerca del límite
-                                            }
-                                        ?>
-                                        <span class="badge <?php echo $badge_class; ?> weekly-total" title="Límite Semanal: <?php echo $limit; ?> hs">
-                                            Sem: <?php echo number_format($weekly_total, 2); ?> hs
-                                        </span>
+                        <?php foreach($data['users'] as $user):
+                            $weekly_total = $data['weekly_totals'][$user->id];
+                            $limit        = $user->weekly_hour_limit;
+                            $badge_class  = 'bg-primary';
+                            if ($limit > 0 && $weekly_total > $limit)         { $badge_class = 'bg-danger'; }
+                            elseif ($limit > 0 && $weekly_total > $limit*0.9) { $badge_class = 'bg-warning text-dark'; }
+                        ?>
+                        <tr data-user-row-id="<?php echo $user->id; ?>">
+                            <td class="user-col">
+                                <div><?php echo htmlspecialchars($user->full_name); ?></div>
+                                <div class="hours-summary">
+                                    <span class="badge <?php echo $badge_class; ?> weekly-total"
+                                                                                    title="L&iacute;mite: <?php echo $limit; ?> hs"
+                                                                                    data-weekly-limit="<?php echo (float)$limit; ?>">
+                                        Sem: <?php echo number_format($weekly_total, 1); ?> hs
+                                    </span>
+                                    <span class="badge bg-info monthly-total-<?php echo $data['month1_num']; ?>">
+                                        <?php echo $data['nombres_mes'][$data['month1_num']]; ?>: <?php echo number_format($data['monthly_totals'][$user->id][$data['month1_num']], 1); ?> hs
+                                    </span>
+                                    <?php if($data['month1_num'] != $data['month2_num']): ?>
+                                    <span class="badge bg-secondary monthly-total-<?php echo $data['month2_num']; ?>">
+                                        <?php echo $data['nombres_mes'][$data['month2_num']]; ?>: <?php echo number_format($data['monthly_totals'][$user->id][$data['month2_num']], 1); ?> hs
+                                    </span>
+                                    <?php endif; ?>
+                                </div>
+                                <button type="button"
+                                        class="btn btn-outline-secondary btn-sm mt-1 btn-repeat-schedule"
+                                        data-user-id="<?php echo (int)$user->id; ?>"
+                                        data-user-name="<?php echo htmlspecialchars($user->full_name, ENT_QUOTES); ?>"
+                                        title="Repetir horario de esta semana">
+                                    <i class="fas fa-calendar-plus"></i> Repetir
+                                </button>
+                            </td>
 
-                                        <span class="badge bg-info monthly-total-<?php echo $data['month1_num']; ?>"><?php echo $data['nombres_mes'][$data['month1_num']]; ?>: <?php echo number_format($data['monthly_totals'][$user->id][$data['month1_num']], 2); ?> hs</span>
-                                        <?php if($data['month1_num'] != $data['month2_num']): ?>
-                                        <span class="badge bg-secondary monthly-total-<?php echo $data['month2_num']; ?>"><?php echo $data['nombres_mes'][$data['month2_num']]; ?>: <?php echo number_format($data['monthly_totals'][$user->id][$data['month2_num']], 2); ?> hs</span>
+                            <?php foreach($data['week_dates'] as $day_index => $day):
+                                $date    = $day['full_date'];
+                                $entries = isset($data['schedules'][$user->id][$date]) ? $data['schedules'][$user->id][$date] : [];
+                                $request = isset($data['requests'][$user->id][$date])  ? $data['requests'][$user->id][$date]  : null;
+                                if ($request && $request->status !== 'Aprobado') { $request = null; }
+                            ?>
+                            <td class="day-cell <?php echo isset($data['holidays'][$date]) ? 'is-holiday' : ''; ?>"
+                                data-user-id="<?php echo $user->id; ?>"
+                                data-date="<?php echo $date; ?>"
+                                data-day-index="<?php echo $day_index; ?>">
+
+                                <?php if($request): ?>
+                                <div class="request-badge"
+                                     style="border-left-color:<?php echo htmlspecialchars($request->color); ?>;background:<?php echo htmlspecialchars($request->color); ?>18;color:#333;">
+                                    <i class="fas fa-calendar-check me-1"></i><strong><?php echo htmlspecialchars($request->type_name); ?></strong>
+                                </div>
+                                <?php endif; ?>
+
+                                <div class="entries-container">
+                                    <?php foreach($entries as $idx => $entry):
+                                        $otReadonly = ($entry && ($entry->type ?? '') === 'overtime' && empty($data['overtime_planner_enabled']));
+                                        echo renderChip($user->id, $date, $idx, $entry, $data['shifts'], $otReadonly);
+                                    endforeach; ?>
+                                </div>
+
+                                <div class="empty-label" <?php echo !empty($entries) ? 'style="display:none;"' : ''; ?>>
+                                    <i class="fas fa-moon me-1" style="font-size:.65rem;"></i>Libre
+                                </div>
+
+                                <div class="cell-footer">
+                                    <div class="add-pills">
+                                        <button type="button" class="add-pill add-pill-shift"  onclick="addNewEntry(this,'shift')"><i class="fas fa-tag"></i> Turno</button>
+                                        <?php if (!empty($data['overtime_planner_enabled'])): ?>
+                                        <button type="button" class="add-pill add-pill-ot"     onclick="addNewEntry(this,'overtime')"><i class="fas fa-clock"></i> Extra</button>
+                                        <?php endif; ?>
+                                        <button type="button" class="add-pill add-pill-custom" onclick="addNewEntry(this,'custom')"><i class="fas fa-user-clock"></i> Custom</button>
+                                        <?php if (function_exists('vacation_module_ready') && vacation_module_ready()): ?>
+                                        <button type="button" class="add-pill" style="background:#0ea5e9;color:#fff" onclick="addNewEntry(this,'vacation')"><i class="fas fa-umbrella-beach"></i> Vacaciones</button>
                                         <?php endif; ?>
                                     </div>
-                                </td>
-                                <?php foreach($data['week_dates'] as $day_index => $day): 
-                                    $date = $day['full_date'];
-                                    $entries = isset($data['schedules'][$user->id][$date]) ? $data['schedules'][$user->id][$date] : [];
-                                    $request = isset($data['requests'][$user->id][$date]) ? $data['requests'][$user->id][$date] : null;
-                                    if ($request && $request->status !== 'Aprobado') { $request = null; }
-                                ?>
-                                    <td class="day-cell <?php echo isset($data['holidays'][$date]) ? 'is-holiday' : ''; ?>" data-user-id="<?php echo $user->id; ?>" data-date="<?php echo $date; ?>" data-day-index="<?php echo $day_index; ?>">
-                                        <?php if($request): ?>
-                                            <div class="request-badge" style="border-left-color: <?php echo htmlspecialchars($request->color); ?>; background-color: <?php echo htmlspecialchars($request->color) . '20'; ?>; color: #333;">
-                                                <strong><?php echo htmlspecialchars($request->type_name); ?></strong>
-                                            </div>
-                                        <?php endif; ?>
-                                        <div class="blocks-container">
-                                            <?php if(empty($entries)): ?><span class="text-muted fst-italic">Libre</span><?php else: ?>
-                                                <?php foreach($entries as $entry): 
-                                                    $color = '#6c757d'; $name_display = 'Personalizado';
-                                                    if ($entry->type == 'shift' && !empty($entry->shift_name)) { $color = $entry->color; $name_display = $entry->shift_name; } 
-                                                    elseif ($entry->type == 'overtime') { $color = '#ffc107'; $name_display = 'Horas Extras'; }
-                                                ?>
-                                                <div class="schedule-block" style="background-color: <?php echo htmlspecialchars($color); ?>;">
-                                                    <span><?php echo htmlspecialchars($name_display); ?></span>
-                                                    <?php if(!empty($entry->notes)): ?><small class="block-notes d-block"><?php echo htmlspecialchars($entry->notes); ?></small><?php endif; ?>
-                                                </div>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="entries-container"><?php foreach($entries as $index => $entry): ?><?php echo generateEntryHtml($user->id, $date, $index, $entry, $data['shifts']); ?><?php endforeach; ?></div>
-                                        <div class="cell-actions">
-                                            <button type="button" class="btn btn-sm btn-icon edit-btn" onclick="toggleEditMode(this)" title="Editar Día"><i class="fas fa-pencil-alt"></i></button>
-                                            <button type="button" class="btn btn-sm btn-icon copy-btn" onclick="copyPreviousDay(this)" title="Copiar Día Anterior"><i class="fas fa-copy"></i></button>
-                                            <div class="add-entry-menu">
-                                                <button type="button" class="btn btn-sm btn-icon btn-primary" onclick="addEntry(this, 'shift')" title="Añadir Turno"><i class="fas fa-tags"></i></button>
-                                                <button type="button" class="btn btn-sm btn-icon btn-secondary" onclick="addEntry(this, 'custom')" title="Añadir Personalizado"><i class="fas fa-user-clock"></i></button>
-                                                <button type="button" class="btn btn-sm btn-icon btn-warning" onclick="addEntry(this, 'overtime')" title="Añadir Horas Extras"><i class="fas fa-plus-circle"></i></button>
-                                            </div>
-                                        </div>
-                                    </td>
-                                <?php endforeach; ?>
-                            </tr>
+                                    <div class="cell-actions mt-1">
+                                        <button type="button" class="btn-cell btn-cell-edit"
+                                                onclick="toggleCellEdit(this)"
+                                            title="Editar d&iacute;a"><i class="fas fa-pencil-alt"></i></button>
+                                        <button type="button" class="btn-cell btn-cell-copy"
+                                                onclick="copyPrevDay(this)"
+                                            title="Copiar d&iacute;a anterior"><i class="fas fa-copy"></i></button>
+                                        <button type="button" class="btn-cell btn-cell-cancel"
+                                                onclick="cancelEdit(this)"
+                                            title="Cancelar edici&oacute;n"><i class="fas fa-times"></i></button>
+                                    </div>
+                                </div>
+                            </td>
+                            <?php endforeach; ?>
+                        </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-    <div class="text-center mt-3"><button type="submit" class="btn btn-primary btn-lg">Guardar Toda la Semana</button></div>
 </form>
 
-<div id="templates" style="display: none;"><?php echo generateEntryHtml('{userId}', '{date}', '{index}', null, $data['shifts']); ?></div>
+<div class="save-week-bar">
+    <span class="save-week-hint"><i class="fas fa-info-circle me-1"></i>Guard&aacute; d&iacute;as individualmente (✓) o toda la semana de golpe.</span>
+    <button type="submit" form="planner-form" class="btn btn-primary btn-save-week">
+        <i class="fas fa-save me-2"></i>Guardar Toda la Semana
+    </button>
+</div>
 
 <script>
-var monthNames = <?php echo json_encode($data['nombres_mes']); ?>;
+/* â”€â”€ Datos de turnos disponibles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   Siempre actualizado desde PHP al cargar la pÃ¡gina.
+   Nuevas entradas se construyen desde este array, evitando que el selector
+   quede con turnos viejos si la pÃ¡gina no se recargÃ³.                        */
+var PLANNER_OVERTIME_ENABLED = <?php echo !empty($data['overtime_planner_enabled']) ? 'true' : 'false'; ?>;
 
-document.getElementById('date-picker').addEventListener('change', function(e) {
-    if(!e.target.value) return;
-    var selectedDate = new Date(e.target.value);
-    selectedDate.setMinutes(selectedDate.getMinutes() + selectedDate.getTimezoneOffset());
-    
-    Date.prototype.getWeek = function() {
-        var date = new Date(this.getTime());
-        date.setHours(0, 0, 0, 0);
-        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-        var week1 = new Date(date.getFullYear(), 0, 4);
-        return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+var plannerShifts = <?php echo json_script_safe(array_values(array_map(function($s){
+    return ['id' => (int)$s->id, 'name' => $s->shift_name, 'color' => $s->color ?? '#6c757d', 'hours' => (float)($s->total_hours ?? 0)];
+}, $data['shifts']))); ?>;
+
+/* â”€â”€ Drag & Drop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+var _dragSource = null;   // 'chip' | 'palette'
+var _dragEl     = null;   // elemento DOM arrastrado
+var _palData    = null;   // { type, shiftId } cuando viene de paleta
+
+document.addEventListener('dragstart', function(e) {
+    var chip = e.target.closest('.entry-chip');
+    if (chip) {
+        if (chip.dataset.readonly === '1') {
+            e.preventDefault();
+            return;
+        }
+        _dragSource = 'chip';
+        _dragEl     = chip;
+        chip.classList.add('is-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        return;
     }
-
-    var year = selectedDate.getFullYear();
-    var week = selectedDate.getWeek();
-    var weekString = String(week).padStart(2, '0');
-
-    var newUrl = '<?php echo URLROOT; ?>/admin/weeklyPlanner?week=' + year + '-W' + weekString;
-    window.location.href = newUrl;
+    var pal = e.target.closest('.palette-chip');
+    if (pal) {
+        if ((pal.dataset.type || '') === 'overtime' && !PLANNER_OVERTIME_ENABLED) {
+            e.preventDefault();
+            return;
+        }
+        _dragSource = 'palette';
+        _dragEl     = pal;
+        _palData    = { type: pal.dataset.type || 'shift', shiftId: pal.dataset.shiftId || null };
+        pal.classList.add('is-dragging');
+        e.dataTransfer.effectAllowed = 'copy';
+    }
 });
 
-function toggleEditMode(button) {
-    var cell = button.closest('.day-cell');
-    var isEditing = cell.classList.toggle('is-editing');
-    var copyBtn = button.nextElementSibling;
-    var addMenu = button.parentElement.querySelector('.add-entry-menu');
+document.addEventListener('dragend', function() {
+    if (_dragEl) _dragEl.classList.remove('is-dragging');
+    _dragSource = _dragEl = _palData = null;
+    document.querySelectorAll('.day-cell.drag-over').forEach(function(c){ c.classList.remove('drag-over'); });
+});
 
-    if (isEditing) {
-        button.innerHTML = '<i class="fas fa-save"></i>';
-        button.title = 'Guardar Día';
-        button.classList.remove('edit-btn');
-        button.classList.add('btn-success');
-        button.onclick = function() { saveDay(this); };
-        copyBtn.style.display = 'none';
-        addMenu.classList.add('is-active');
-    } else {
-        button.innerHTML = '<i class="fas fa-pencil-alt"></i>';
-        button.title = 'Editar Día';
-        button.classList.remove('btn-success');
-        button.classList.add('edit-btn');
-        button.onclick = function() { toggleEditMode(this); };
-        copyBtn.style.display = 'inline-flex';
-        addMenu.classList.remove('is-active');
-    }
-}
+/* DelegaciÃ³n de eventos en toda la tabla para drop zones */
+document.querySelectorAll('.day-cell').forEach(function(cell) {
+    cell.addEventListener('dragover', function(e) {
+        if (!_dragSource) return;
+        e.preventDefault();
+        cell.classList.add('drag-over');
+    });
+    cell.addEventListener('dragleave', function(e) {
+        if (!cell.contains(e.relatedTarget)) cell.classList.remove('drag-over');
+    });
+    cell.addEventListener('drop', function(e) {
+        e.preventDefault();
+        cell.classList.remove('drag-over');
 
-function saveDay(button) {
-    var cell = button.closest('.day-cell');
-    var form = document.getElementById('planner-form');
-    var formData = new FormData(form);
-    
-    formData.append('is_ajax', '1');
-    formData.append('user_id', cell.dataset.userId);
-    formData.append('date', cell.dataset.date);
-
-    button.disabled = true;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-    fetch('<?php echo URLROOT; ?>/admin/saveDayAjax', { method: 'POST', body: formData })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.reload(); 
-        } else {
-            alert('Error: ' + (data.message || 'Ocurrió un error desconocido.'));
-            button.disabled = false;
-            button.innerHTML = '<i class="fas fa-save"></i>';
+        if (_dragSource === 'chip' && _dragEl) {
+            if (_dragEl.dataset.readonly === '1') return;
+            var srcCell = _dragEl.closest('.day-cell');
+            if (srcCell === cell) return;
+            renameChipInputs(_dragEl, cell.dataset.userId, cell.dataset.date);
+            cell.querySelector('.entries-container').appendChild(_dragEl);
+            if (srcCell) updateEmptyLabel(srcCell);
+            enterEditMode(cell);
+            updateEmptyLabel(cell);
+            if (srcCell) refreshRowTotals(srcCell.closest('tr'));
+            refreshRowTotals(cell.closest('tr'));
         }
-    })
-    .catch(error => {
-        console.error('Error en la petición AJAX:', error);
-        alert('Ocurrió un error de conexión. Inténtalo de nuevo.');
-        button.disabled = false;
-        button.innerHTML = '<i class="fas fa-save"></i>';
+
+        if (_dragSource === 'palette' && _palData) {
+            if (_palData.type === 'overtime' && !PLANNER_OVERTIME_ENABLED) return;
+            var chip = buildChipElement(cell.dataset.userId, cell.dataset.date, Date.now(), _palData.type, _palData.shiftId);
+            cell.querySelector('.entries-container').appendChild(chip);
+            enterEditMode(cell);
+            updateEmptyLabel(cell);
+            refreshRowTotals(cell.closest('tr'));
+        }
+    });
+});
+
+/* Actualiza los atributos name de todos los inputs/selects de un chip */
+function renameChipInputs(chip, newUserId, newDate) {
+    var newIdx = Date.now();
+    chip.querySelectorAll('[name]').forEach(function(el) {
+        el.name = el.name.replace(
+            /^schedules\[\d+\]\[\d{4}-\d{2}-\d{2}\]\[\d+\]/,
+            'schedules[' + newUserId + '][' + newDate + '][' + newIdx + ']'
+        );
     });
 }
 
-function copyPreviousDay(button) {
-    var cell = button.closest('.day-cell');
+/* â”€â”€ Edit mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function enterEditMode(cell) {
+    cell.classList.add('is-editing');
+    var btn = cell.querySelector('.btn-cell-edit');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-save"></i>';
+        btn.title = 'Guardar d\u00eda';
+        btn.classList.replace('btn-cell-edit', 'btn-cell-save');
+        btn.onclick = function() { saveDay(cell, this); };
+    }
+}
+
+function exitEditMode(cell) {
+    cell.classList.remove('is-editing');
+    var btn = cell.querySelector('.btn-cell-save');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+        btn.title = 'Editar d\u00eda';
+        btn.classList.replace('btn-cell-save', 'btn-cell-edit');
+        btn.onclick = function() { toggleCellEdit(this); };
+    }
+}
+
+function toggleCellEdit(btn) {
+    var cell = btn.closest('.day-cell');
+    if (cell.classList.contains('is-editing')) { exitEditMode(cell); }
+    else { enterEditMode(cell); }
+}
+
+function cancelEdit(btn) { exitEditMode(btn.closest('.day-cell')); }
+
+/* â”€â”€ Save day (AJAX) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function saveDay(cell, btn) {
+    var formData = new FormData(document.getElementById('planner-form'));
+    formData.append('is_ajax', '1');
+    formData.append('user_id', cell.dataset.userId);
+    formData.append('date',    cell.dataset.date);
+    formData.set('csrf_token', document.querySelector('#planner-form [name="csrf_token"]').value);
+
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+
+    fetch('<?php echo URLROOT; ?>/admin/saveDayAjax', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i>'; }
+            refreshRowTotals(cell.closest('tr'));
+            setTimeout(function() { exitEditMode(cell); }, 700);
+        } else {
+            alert('Error: ' + (data.message || 'Error desconocido'));
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i>'; }
+        }
+    })
+    .catch(function() {
+        alert('Error de conexi\u00f3n. Intenta de nuevo.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i>'; }
+    });
+}
+
+/* â”€â”€ Remove entry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function removeEntry(btn) {
+    var chip = btn.closest('.entry-chip');
+    if (chip && chip.dataset.readonly === '1') return;
+    var cell = btn.closest('.day-cell');
+    chip.remove();
+    updateEmptyLabel(cell);
+    refreshRowTotals(cell.closest('tr'));
+}
+
+/* â”€â”€ Copy prev day â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function copyPrevDay(btn) {
+    var cell     = btn.closest('.day-cell');
     var dayIndex = parseInt(cell.dataset.dayIndex);
-    if (dayIndex === 0) { alert('No hay día anterior para copiar.'); return; }
-    
-    var prevCell = cell.parentElement.children[dayIndex];
-    if (prevCell.querySelector('.request-block')) { alert('No se puede copiar desde un día con una solicitud (ej. vacaciones).'); return; }
+    if (dayIndex === 0) { alert('No hay d\u00eda anterior para copiar.'); return; }
 
-    var sourceContainer = prevCell.querySelector('.entries-container');
-    var targetContainer = cell.querySelector('.entries-container');
-    if (!sourceContainer) return;
-    
-    targetContainer.innerHTML = sourceContainer.innerHTML.replace(new RegExp(prevCell.dataset.date, 'g'), cell.dataset.date);
-    
-    if (!cell.classList.contains('is-editing')) {
-        toggleEditMode(cell.querySelector('.edit-btn'));
+    var prevCell = cell.parentElement.children[dayIndex]; // children[0]=user-col td
+    if (prevCell.querySelector('.request-badge')) {
+        alert('No se puede copiar: el d\u00eda anterior tiene una solicitud aprobada.'); return;
     }
+
+    var src = prevCell.querySelector('.entries-container');
+    var tgt = cell.querySelector('.entries-container');
+    if (!src) return;
+
+    tgt.innerHTML = src.innerHTML
+        .replace(new RegExp(prevCell.dataset.date, 'g'), cell.dataset.date)
+        .replace(new RegExp('\\[' + prevCell.dataset.userId + '\\]', 'g'), '[' + cell.dataset.userId + ']');
+
+    enterEditMode(cell);
+    updateEmptyLabel(cell);
+    refreshRowTotals(cell.closest('tr'));
 }
 
-function addEntry(button, type) {
-    var menu = button.closest('.add-entry-menu');
-    var cell = button.closest('.day-cell');
+/* â”€â”€ Add new entry (desde botones pill) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function addNewEntry(btn, type) {
+    if (type === 'overtime' && !PLANNER_OVERTIME_ENABLED) return;
+    var cell  = btn.closest('.day-cell');
+    var shiftId = (type === 'shift' && plannerShifts.length > 0) ? plannerShifts[0].id : null;
+    var chip  = buildChipElement(cell.dataset.userId, cell.dataset.date, Date.now(), type, shiftId);
+    cell.querySelector('.entries-container').appendChild(chip);
+    updateEmptyLabel(cell);
+    refreshRowTotals(cell.closest('tr'));
+}
+
+/* â”€â”€ Construir chip desde JS (usa plannerShifts, siempre actualizado) â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function buildChipElement(userId, date, index, type, shiftId) {
+    var color = '#6c757d', label = 'Turno';
+    if (type === 'overtime') { color = '#e67e22'; label = 'Horas Extras'; }
+    else if (type === 'custom') { color = '#8b5cf6'; label = 'Personalizado'; }
+    else if (type === 'vacation') { color = '#0ea5e9'; label = 'VACACIONES'; }
+    else if (type === 'leave') { color = '#a855f7'; label = 'Licencia'; }
+    else {
+        var sh = null;
+        for (var i = 0; i < plannerShifts.length; i++) {
+            if (plannerShifts[i].id == shiftId) { sh = plannerShifts[i]; break; }
+        }
+        if (!sh && plannerShifts.length > 0) { sh = plannerShifts[0]; shiftId = sh.id; }
+        if (sh) { color = sh.color || '#6c757d'; label = sh.name; }
+    }
+
+    var prefix   = 'schedules[' + userId + '][' + date + '][' + index + ']';
+    var showSel  = (type === 'shift')  ? '' : 'style="display:none;"';
+    var showTime = (type === 'shift' || type === 'vacation' || type === 'leave') ? 'style="display:none;"' : '';
+
+    var opts = '';
+    for (var j = 0; j < plannerShifts.length; j++) {
+        var s   = plannerShifts[j];
+        var sel = (s.id == shiftId) ? ' selected' : '';
+        opts += '<option value="' + s.id + '" data-color="' + escHtml(s.color) + '"' + sel + '>' + escHtml(s.name) + '</option>';
+    }
+
+    var div = document.createElement('div');
+    div.className = 'entry-chip type-' + type;
+    div.draggable = true;
+    div.dataset.type = type;
+    div.style.setProperty('--chip-color', color);
+    div.innerHTML =
+        '<div class="chip-drag-handle"><i class="fas fa-grip-vertical"></i></div>' +
+        '<div class="chip-body">' +
+            '<div class="chip-view">' +
+                '<span class="chip-dot"></span>' +
+                '<span class="chip-name">' + escHtml(label) + '</span>' +
+            '</div>' +
+            '<div class="chip-controls">' +
+                '<input type="hidden" name="' + prefix + '[type]" value="' + type + '">' +
+                '<div class="chip-selector" ' + showSel + '>' +
+                    '<select class="form-select form-select-sm" name="' + prefix + '[shift_id]" onchange="updateChipFromSelect(this)">' +
+                        opts +
+                    '</select>' +
+                '</div>' +
+                '<div class="chip-times" ' + showTime + '>' +
+                    '<div class="d-flex gap-1 align-items-center mt-1">' +
+                        '<input type="time" class="form-control form-control-sm" name="' + prefix + '[start_time]" value="">' +
+                        '<span class="text-muted small">-</span>' +
+                        '<input type="time" class="form-control form-control-sm" name="' + prefix + '[end_time]" value="">' +
+                    '</div>' +
+                '</div>' +
+                '<input type="text" class="form-control form-control-sm mt-1" name="' + prefix + '[notes]" placeholder="Nota (opcional)..." value="">' +
+            '</div>' +
+        '</div>' +
+        '<button type="button" class="btn-chip-remove" onclick="removeEntry(this)" title="Eliminar"><i class="fas fa-times"></i></button>';
+    return div;
+}
+
+/* â”€â”€ Actualizar color/label del chip al cambiar el select de turno â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function updateChipFromSelect(select) {
+    var chip = select.closest('.entry-chip');
+    if (!chip) return;
+    var opt   = select.options[select.selectedIndex];
+    var color = (opt && opt.dataset.color) ? opt.dataset.color : '#6c757d';
+    chip.style.setProperty('--chip-color', color);
+    var nameEl = chip.querySelector('.chip-name');
+    if (nameEl) nameEl.textContent = opt ? opt.text : '';
+    refreshRowTotals(chip.closest('tr'));
+}
+
+/* â”€â”€ Mostrar/ocultar "Libre" segÃºn haya chips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function updateEmptyLabel(cell) {
     var container = cell.querySelector('.entries-container');
-    var userId = cell.dataset.userId;
-    var date = cell.dataset.date;
-    var newIndex = new Date().getTime();
-    var template = document.getElementById('templates').innerHTML;
-    var newHtml = template.replace(/{userId}/g, userId).replace(/{date}/g, date).replace(/{index}/g, newIndex);
-    var tempDiv = document.createElement('div');
-    tempDiv.innerHTML = newHtml;
-    var newEntry = tempDiv.children[0];
-    
-    if (!newEntry) return;
-
-    newEntry.className = 'schedule-entry type-' + type;
-    newEntry.querySelector('input[type=hidden]').value = type;
-    if (type === 'shift') {
-        newEntry.querySelector('.time-inputs').style.display = 'none';
-        newEntry.querySelector('.shift-selector').style.display = 'block';
-    } else {
-        newEntry.querySelector('.shift-selector').style.display = 'none';
-        newEntry.querySelector('.time-inputs').style.display = 'block';
-    }
-    container.appendChild(newEntry);
-    if(menu) { menu.classList.remove('is-active'); }
+    var label     = cell.querySelector('.empty-label');
+    if (!container || !label) return;
+    label.style.display = (container.querySelectorAll('.entry-chip').length > 0) ? 'none' : '';
 }
+
+function parseTimeToMinutes(value) {
+    if (!value || !/^\d{2}:\d{2}/.test(value)) return 0;
+    var parts = value.split(':');
+    return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
+}
+
+function calculateRangeHours(startValue, endValue) {
+    var startMinutes = parseTimeToMinutes(startValue);
+    var endMinutes = parseTimeToMinutes(endValue);
+    if (!startMinutes && !endMinutes) return 0;
+    if (endMinutes < startMinutes) endMinutes += 24 * 60;
+    return (endMinutes - startMinutes) / 60;
+}
+
+function getShiftHours(shiftId) {
+    for (var i = 0; i < plannerShifts.length; i++) {
+        if (String(plannerShifts[i].id) === String(shiftId)) {
+            return parseFloat(plannerShifts[i].hours || 0);
+        }
+    }
+    return 0;
+}
+
+function calculateChipHours(chip) {
+    if (!chip) return 0;
+    var typeInput = chip.querySelector('input[type="hidden"][name$="[type]"]');
+    var type = typeInput ? typeInput.value : (chip.dataset.type || 'shift');
+
+    if (type === 'shift') {
+        var shiftSelect = chip.querySelector('select[name$="[shift_id]"]');
+        return shiftSelect ? getShiftHours(shiftSelect.value) : 0;
+    }
+
+    var startInput = chip.querySelector('input[name$="[start_time]"]');
+    var endInput = chip.querySelector('input[name$="[end_time]"]');
+    return calculateRangeHours(startInput ? startInput.value : '', endInput ? endInput.value : '');
+}
+
+function updateWeeklyBadgeState(badge, total) {
+    if (!badge) return;
+    var limit = parseFloat(badge.dataset.weeklyLimit || 0);
+    badge.className = 'badge weekly-total';
+
+    if (limit > 0 && total > limit) {
+        badge.classList.add('bg-danger');
+    } else if (limit > 0 && total > (limit * 0.9)) {
+        badge.classList.add('bg-warning', 'text-dark');
+    } else {
+        badge.classList.add('bg-primary');
+    }
+}
+
+function refreshRowTotals(row) {
+    if (!row) return;
+
+    var weeklyTotal = 0;
+    var monthlyTotals = {};
+
+    row.querySelectorAll('.day-cell').forEach(function(cell) {
+        var cellTotal = 0;
+        cell.querySelectorAll('.entry-chip').forEach(function(chip) {
+            cellTotal += calculateChipHours(chip);
+        });
+
+        weeklyTotal += cellTotal;
+
+        var monthKey = String(parseInt(cell.dataset.date.split('-')[1], 10));
+        monthlyTotals[monthKey] = (monthlyTotals[monthKey] || 0) + cellTotal;
+
+        cell.classList.toggle('day-over-limit', cellTotal > 9);
+        cell.title = cellTotal > 9 ? ('D\u00eda excedido: ' + cellTotal.toFixed(1) + ' hs') : '';
+    });
+
+    var weeklyBadge = row.querySelector('.weekly-total');
+    if (weeklyBadge) {
+        weeklyBadge.textContent = 'Sem: ' + weeklyTotal.toFixed(1) + ' hs';
+        updateWeeklyBadgeState(weeklyBadge, weeklyTotal);
+    }
+
+    row.querySelectorAll('[class*="monthly-total-"]').forEach(function(badge) {
+        var monthClass = Array.from(badge.classList).find(function(cls) {
+            return cls.indexOf('monthly-total-') === 0;
+        });
+        if (!monthClass) return;
+
+        var monthKey = monthClass.replace('monthly-total-', '');
+        var label = badge.textContent.split(':')[0];
+        var total = monthlyTotals[monthKey] || 0;
+        badge.textContent = label + ': ' + total.toFixed(1) + ' hs';
+    });
+}
+
+document.getElementById('planner-form').addEventListener('input', function(e) {
+    var cell = e.target.closest('.day-cell');
+    if (cell) refreshRowTotals(cell.closest('tr'));
+});
+
+document.getElementById('planner-form').addEventListener('change', function(e) {
+    var cell = e.target.closest('.day-cell');
+    if (cell) refreshRowTotals(cell.closest('tr'));
+});
+
+/* â”€â”€ Date picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+document.getElementById('date-picker').addEventListener('change', function(e) {
+    if (!e.target.value) return;
+    var d = new Date(e.target.value);
+    d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+    var jan4  = new Date(d.getFullYear(), 0, 4);
+    var start = new Date(jan4.getFullYear(), jan4.getMonth(), jan4.getDate() - (jan4.getDay() + 6) % 7);
+    var week  = 1 + Math.floor((d - start) / (7 * 86400000));
+    window.location.href = '<?php echo URLROOT; ?>/admin/weeklyPlanner?week=' + d.getFullYear() + '-W' + String(week).padStart(2, '0');
+});
+
+/* â”€â”€ Escape HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* â”€â”€ Inicializar empty labels al cargar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+document.querySelectorAll('.day-cell').forEach(function(c) {
+    updateEmptyLabel(c);
+});
+document.querySelectorAll('tr[data-user-row-id]').forEach(function(row) {
+    refreshRowTotals(row);
+});
+
+/* Repetir horario de la semana visible */
+(function() {
+    var modalEl = document.getElementById('repeatScheduleModal');
+    if (!modalEl || typeof bootstrap === 'undefined') return;
+    var modal = new bootstrap.Modal(modalEl);
+    var form = document.getElementById('repeatScheduleForm');
+    var weekStart = '<?php echo htmlspecialchars($data['week_dates'][0]['full_date'] ?? date('Y-m-d')); ?>';
+    var weekEnd = '<?php echo htmlspecialchars(end($data['week_dates'])['full_date'] ?? date('Y-m-d')); ?>';
+    var monthEnd = '<?php echo date('Y-m-t', strtotime($data['week_dates'][0]['full_date'] ?? 'now')); ?>';
+
+    document.querySelectorAll('.btn-repeat-schedule').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            form.querySelector('[name="user_id"]').value = btn.getAttribute('data-user-id');
+            document.getElementById('repeatScheduleUserName').textContent = btn.getAttribute('data-user-name');
+            var parts = weekEnd.split('-');
+            var y = parseInt(parts[0], 10);
+            var m = parseInt(parts[1], 10) - 1;
+            var d = parseInt(parts[2], 10) + 1;
+            var nextMon = new Date(y, m, d);
+            var fromDefault = nextMon.getFullYear() + '-'
+                + String(nextMon.getMonth() + 1).padStart(2, '0') + '-'
+                + String(nextMon.getDate()).padStart(2, '0');
+            form.querySelector('[name="from_date"]').value = fromDefault;
+            form.querySelector('[name="to_date"]').value = monthEnd;
+            modal.show();
+        });
+    });
+})();
 </script>
+
+<div class="modal fade" id="repeatScheduleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="repeatScheduleForm" method="post" action="<?php echo URLROOT; ?>/admin/applySchedulePattern">
+                <?php echo csrf_field(); ?>
+                <input type="hidden" name="user_id" value="">
+                <input type="hidden" name="ref_week" value="<?php echo htmlspecialchars($data['current_week_string']); ?>">
+                <input type="hidden" name="return_week" value="<?php echo htmlspecialchars($data['current_week_string']); ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title">Repetir horario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">
+                        Copia el patrón de <strong>esta semana</strong>
+                        (<?php echo htmlspecialchars($data['week_dates'][0]['full_date']); ?>
+                        – <?php echo htmlspecialchars(end($data['week_dates'])['full_date']); ?>)
+                        para <strong id="repeatScheduleUserName"></strong>.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label">Desde</label>
+                        <input type="date" name="from_date" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Hasta</label>
+                        <input type="date" name="to_date" class="form-control" required>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="overwrite" value="1" id="repeatOverwrite" checked>
+                        <label class="form-check-label" for="repeatOverwrite">Sobrescribir días que ya tengan turnos</label>
+                    </div>
+                    <p class="form-text mb-0">Sin marcar la casilla, solo se completan días vacíos.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Aplicar al rango</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <?php require APPROOT . '/views/inc/footer.php'; ?>

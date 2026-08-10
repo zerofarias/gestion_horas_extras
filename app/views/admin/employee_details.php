@@ -16,7 +16,7 @@ require APPROOT . '/views/inc/header.php'; ?>
     <div class="card-body">
         <?php if(isset($_SESSION['flash_success'])): ?>
             <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <?php echo $_SESSION['flash_success']; unset($_SESSION['flash_success']); ?>
+                <?php echo htmlspecialchars($_SESSION['flash_success']); unset($_SESSION['flash_success']); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
@@ -53,7 +53,7 @@ require APPROOT . '/views/inc/header.php'; ?>
                             <a href="<?php echo URLROOT; ?>/admin/editEntry/<?php echo $entry->id; ?>" class="btn btn-warning btn-sm" title="Editar">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <a href="#" class="btn btn-danger btn-sm delete-btn" data-id="<?php echo $entry->id; ?>" data-user-id="<?php echo $entry->user_id; ?>" title="Eliminar">
+                            <a href="#" class="btn btn-danger btn-sm delete-entry-btn" data-id="<?php echo $entry->id; ?>" title="Eliminar">
                                 <i class="fas fa-trash"></i>
                             </a>
                         </td>
@@ -66,6 +66,11 @@ require APPROOT . '/views/inc/header.php'; ?>
     </div>
 </div>
 
+<form method="post" action="<?php echo URLROOT; ?>/admin/deleteEntry/0" id="delete-entry-form" class="d-none">
+    <?php echo csrf_field(); ?>
+    <input type="hidden" name="entry_id" value="">
+</form>
+
 <?php require APPROOT . '/views/inc/footer.php'; ?>
 
 <script>
@@ -74,7 +79,7 @@ $(document).ready(function() {
     const employeeName = $('h4 strong').text();
     const exportTitle = 'Horas Pendientes - ' + employeeName;
     $('#employee-details-table').DataTable({
-        language: { url: "//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json" },
+        language: window.DATATABLES_LANG_ES || { url: '<?php echo URLROOT; ?>/js/datatables-es-ES.json' },
         order: [[ 0, "desc" ]],
         dom: 'Bfrtip',
         buttons: [
@@ -85,10 +90,10 @@ $(document).ready(function() {
     });
 
     // --- INICIO DE CAMBIO: Lógica para el botón de eliminar con SweetAlert ---
-    $('#employee-details-table').on('click', '.delete-btn', function(e) {
+    const deleteEntryForm = document.getElementById('delete-entry-form');
+    $('#employee-details-table').on('click', '.delete-entry-btn', function(e) {
         e.preventDefault();
         const entryId = $(this).data('id');
-        const userId = $(this).data('user-id');
         
         Swal.fire({
             title: '¿Estás seguro?',
@@ -100,9 +105,10 @@ $(document).ready(function() {
             confirmButtonText: 'Sí, ¡bórralo!',
             cancelButtonText: 'Cancelar'
         }).then((result) => {
-            if (result.isConfirmed) {
-                // Si el usuario confirma, redirige a la URL de eliminación
-                window.location.href = `<?php echo URLROOT; ?>/admin/deleteEntry/${entryId}/${userId}`;
+            if (result.isConfirmed && deleteEntryForm) {
+                deleteEntryForm.action = '<?php echo URLROOT; ?>/admin/deleteEntry/' + entryId;
+                deleteEntryForm.querySelector('[name="entry_id"]').value = entryId;
+                deleteEntryForm.submit();
             }
         });
     });

@@ -36,8 +36,8 @@ class Core {
         // 2. Busca el método en el controlador.
         // El segundo elemento de la URL ($url[1]) es el nombre del método.
         if(isset($url[1])){
-            // Comprueba si el método existe dentro del controlador instanciado.
-            if(method_exists($this->currentController, $url[1])){
+            // is_callable (y no method_exists) para excluir métodos privados/protegidos.
+            if(is_callable([$this->currentController, $url[1]])){
                 $this->currentMethod = $url[1];
                 // Se elimina el método del array $url.
                 unset($url[1]);
@@ -49,6 +49,10 @@ class Core {
         $this->params = $url ? array_values($url) : [];
         
         // 4. Llama al método del controlador con los parámetros.
+        if (!is_callable([$this->currentController, $this->currentMethod])) {
+            http_response_code(404);
+            exit('Página no encontrada.');
+        }
         call_user_func_array([$this->currentController, $this->currentMethod], $this->params);
     }
     
@@ -57,13 +61,26 @@ class Core {
      * @return array La URL descompuesta en un array.
      */
     public function getUrl(){
-        if(isset($_GET['url'])){
-            $url = rtrim($_GET['url'], '/'); // Quita la barra final (/)
-            $url = filter_var($url, FILTER_SANITIZE_URL); // Sanea la URL
-            $url = explode('/', $url); // Divide la URL en un array
-            return $url;
+        if (!isset($_GET['url'])) {
+            return [];
         }
-        return []; // Devuelve un array vacío si no hay URL
+        $url = rtrim((string)$_GET['url'], '/');
+        if ($url === '') {
+            return [];
+        }
+        $parts = explode('/', $url);
+        $safe = [];
+        foreach ($parts as $part) {
+            $part = trim($part);
+            if ($part === '' || $part === '.' || $part === '..') {
+                continue;
+            }
+            $part = preg_replace('/[^a-zA-Z0-9_-]/', '', $part);
+            if ($part === '') {
+                continue;
+            }
+            $safe[] = $part;
+        }
+        return $safe;
     }
 }
-?>

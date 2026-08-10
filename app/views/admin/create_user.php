@@ -17,34 +17,56 @@ require APPROOT . '/views/inc/header.php'; ?>
             </div>
             <div class="card-body">
                 <!-- El formulario necesita 'enctype="multipart/form-data"' para poder subir archivos -->
-                <form action="<?php echo URLROOT; ?>/admin/createUser" method="post" enctype="multipart/form-data">
+                <form action="<?php echo URLROOT; ?>/admin/createUser" method="post" enctype="multipart/form-data" autocomplete="off">
+                    <?php echo csrf_field(); ?>
+                    <?php
+                    $nameSource = isset($data) ? $data : [];
+                    require APPROOT . '/views/admin/partials/user_name_fields.php';
+                    ?>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="full_name" class="form-label">Nombre Completo <span class="text-danger">*</span></label>
-                            <input type="text" name="full_name" class="form-control" value="<?php echo isset($data['full_name']) ? htmlspecialchars($data['full_name']) : ''; ?>" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
                             <label for="username" class="form-label">Nombre de Usuario <span class="text-danger">*</span></label>
-                            <input type="text" name="username" class="form-control <?php echo (isset($data['errors']['username'])) ? 'is-invalid' : ''; ?>" value="<?php echo isset($data['username']) ? htmlspecialchars($data['username']) : ''; ?>" required>
+                            <input type="text" name="username" id="username" class="form-control <?php echo (isset($data['errors']['username'])) ? 'is-invalid' : ''; ?>" value="<?php echo isset($data['username']) ? htmlspecialchars($data['username']) : ''; ?>" autocomplete="off" required>
                             <div class="invalid-feedback"><?php echo isset($data['errors']['username']) ? $data['errors']['username'] : ''; ?></div>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="password" class="form-label">Contraseña <span class="text-danger">*</span></label>
-                            <input type="password" name="password" class="form-control <?php echo (isset($data['errors']['password'])) ? 'is-invalid' : ''; ?>" required>
+                            <input type="password" name="password" id="password" class="form-control <?php echo (isset($data['errors']['password'])) ? 'is-invalid' : ''; ?>" autocomplete="new-password" required>
                             <div class="invalid-feedback"><?php echo isset($data['errors']['password']) ? $data['errors']['password'] : ''; ?></div>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="confirm_password" class="form-label">Confirmar Contraseña <span class="text-danger">*</span></label>
-                            <input type="password" name="confirm_password" class="form-control <?php echo (isset($data['errors']['confirm_password'])) ? 'is-invalid' : ''; ?>" required>
+                            <input type="password" name="confirm_password" id="confirm_password" class="form-control <?php echo (isset($data['errors']['confirm_password'])) ? 'is-invalid' : ''; ?>" autocomplete="new-password" required>
                             <div class="invalid-feedback"><?php echo isset($data['errors']['confirm_password']) ? $data['errors']['confirm_password'] : ''; ?></div>
                         </div>
                     </div>
                     <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="company_id" class="form-label">Empresa <span class="text-danger">*</span></label>
+                            <select name="company_id" id="company_id" class="form-select <?php echo (isset($data['errors']['company_id'])) ? 'is-invalid' : ''; ?>" autocomplete="off" required>
+                                <option value="">— Seleccioná empresa —</option>
+                                <?php
+                                $selectedCompany = isset($data['company_id'])
+                                    ? (int)$data['company_id']
+                                    : (int)($data['default_company_id'] ?? 0);
+                                foreach (($data['companies'] ?? []) as $co):
+                                ?>
+                                <option value="<?php echo (int)$co->id; ?>" <?php echo $selectedCompany === (int)$co->id ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($co->name); ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="invalid-feedback"><?php echo isset($data['errors']['company_id']) ? $data['errors']['company_id'] : ''; ?></div>
+                            <small class="text-muted">Define con quién puede intercambiar turnos (misma empresa).</small>
+                        </div>
+                    </div>
+                    <?php require APPROOT . '/views/admin/partials/user_area_field.php'; ?>
+                    <div class="row">
                          <div class="col-md-6 mb-3">
                             <label for="role" class="form-label">Rol</label>
-                            <select name="role" class="form-select">
+                            <select name="role" id="role" class="form-select" autocomplete="off">
                                 <option value="empleado" selected>Empleado</option>
                                 <option value="admin">Administrador</option>
                             </select>
@@ -55,10 +77,21 @@ require APPROOT . '/views/inc/header.php'; ?>
                             <div class="invalid-feedback"><?php echo isset($data['errors']['picture']) ? $data['errors']['picture'] : ''; ?></div>
                         </div>
                     </div>
+
+                    <?php
+                    $profileExtendedReady = (new User())->isProfileExtendedReady();
+                    $profileSource = isset($data) ? $data : [];
+                    require APPROOT . '/views/admin/partials/user_profile_fields.php';
+                    ?>
                     
                     <?php if (isset($data['errors']['general'])): ?>
-                        <div class="alert alert-danger"><?php echo $data['errors']['general']; ?></div>
+                        <div class="alert alert-danger"><?php echo htmlspecialchars($data['errors']['general']); ?></div>
                     <?php endif; ?>
+
+                    <?php
+                    $source = isset($data) ? $data : [];
+                    require APPROOT . '/views/admin/partials/user_employment_fields.php';
+                    ?>
 
                     <hr>
                     <button type="submit" class="btn btn-success w-100">Guardar Usuario</button>

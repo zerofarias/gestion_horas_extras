@@ -13,7 +13,12 @@ class Company {
     }
 
     public function getAllCompanies() {
-        $this->db->query('SELECT * FROM companies ORDER BY name ASC');
+        if ($this->locationReady()) {
+            $this->db->query('SELECT c.*, cl.locality, cl.province FROM companies c
+                LEFT JOIN company_locations cl ON cl.company_id = c.id ORDER BY c.name ASC');
+        } else {
+            $this->db->query('SELECT * FROM companies ORDER BY name ASC');
+        }
         return $this->db->resultSet();
     }
 
@@ -73,6 +78,43 @@ class Company {
         }
         $this->db->bind(':id', $id);
         return $this->db->execute();
+    }
+
+    public function locationReady() {
+        static $ready = null;
+        if ($ready !== null) {
+            return $ready;
+        }
+        try {
+            $this->db->query("SHOW TABLES LIKE 'company_locations'");
+            $ready = (bool)$this->db->single();
+        } catch (Throwable $e) {
+            $ready = false;
+        }
+        return $ready;
+    }
+
+    public function getLocation($companyId) {
+        if (!$this->locationReady()) {
+            return null;
+        }
+        $this->db->query('SELECT locality, province FROM company_locations WHERE company_id = ?');
+        return $this->db->single([(int)$companyId]);
+    }
+
+    public function saveLocation($companyId, $locality, $province) {
+        if (!$this->locationReady()) {
+            return false;
+        }
+        $locality = trim((string)$locality);
+        $province = trim((string)$province);
+        if ($locality === '' || $province === '') {
+            $this->db->query('DELETE FROM company_locations WHERE company_id = ?');
+            return $this->db->execute([(int)$companyId]);
+        }
+        $this->db->query('INSERT INTO company_locations (company_id, locality, province) VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE locality = VALUES(locality), province = VALUES(province)');
+        return $this->db->execute([(int)$companyId, $locality, $province]);
     }
 
     public function hasShowOvertimeColumn() {

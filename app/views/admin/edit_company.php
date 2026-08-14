@@ -9,6 +9,8 @@ $showCol = !empty($data['show_overtime_column']);
 $showOt = (int)($company->show_overtime ?? 1) === 1;
 $showCpCol = !empty($data['show_cp_extras_column']);
 $showCp = (int)($company->show_cp_extras ?? 1) === 1;
+$location = $data['location'] ?? null;
+$locationReady = !empty($data['location_ready']);
 
 ?>
 
@@ -35,6 +37,22 @@ $showCp = (int)($company->show_cp_extras ?? 1) === 1;
                                value="<?php echo htmlspecialchars($company->name); ?>">
 
                     </div>
+
+                    <?php if ($locationReady): ?>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="locality">Localidad / ciudad</label>
+                            <input type="text" name="locality" id="locality" class="form-control"
+                                value="<?php echo htmlspecialchars($location->locality ?? ''); ?>" placeholder="Ej. Villa María">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="province">Provincia</label>
+                            <input type="text" name="province" id="province" class="form-control"
+                                value="<?php echo htmlspecialchars($location->province ?? ''); ?>" placeholder="Ej. Córdoba">
+                        </div>
+                        <div class="col-12"><small class="text-muted">La ubicación define qué feriados geográficos aplican automáticamente a esta empresa o sucursal.</small></div>
+                    </div>
+                    <?php endif; ?>
 
                     <?php if ($showCol): ?>
 

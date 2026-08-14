@@ -1,6 +1,7 @@
 <?php require APPROOT . '/views/inc/header.php';
 $showOtCol = !empty($data['show_overtime_column']);
 $showCpCol = !empty($data['show_cp_extras_column']);
+$locationReady = !empty($data['location_ready']);
 ?>
 
 <div class="row">
@@ -12,6 +13,7 @@ $showCpCol = !empty($data['show_cp_extras_column']);
                     <thead>
                         <tr>
                             <th>Empresa</th>
+                            <?php if ($locationReady): ?><th>Ubicación</th><?php endif; ?>
                             <?php if ($showOtCol): ?><th>Horas extras</th><?php endif; ?>
                             <?php if ($showCpCol): ?><th>Extras CP</th><?php endif; ?>
                             <th class="text-end">Acciones</th>
@@ -21,6 +23,11 @@ $showCpCol = !empty($data['show_cp_extras_column']);
                         <?php foreach ($data['companies'] as $company): ?>
                         <tr>
                             <td class="fw-medium"><?php echo htmlspecialchars($company->name); ?></td>
+                            <?php if ($locationReady): ?>
+                            <td><?php echo !empty($company->locality) && !empty($company->province)
+                                ? htmlspecialchars($company->locality . ', ' . $company->province)
+                                : '<span class="text-muted">Sin definir</span>'; ?></td>
+                            <?php endif; ?>
                             <?php if ($showOtCol): ?>
                             <td>
                                 <?php if (function_exists('company_overtime_label')): ?>

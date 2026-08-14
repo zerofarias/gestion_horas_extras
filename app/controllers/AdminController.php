@@ -920,6 +920,7 @@ class AdminController {
         $companies = $this->companyModel->getAllCompanies();
         $this->view('admin/companies', [
             'companies' => $companies,
+            'location_ready' => $this->companyModel->locationReady(),
             'show_overtime_column' => $this->companyModel->hasShowOvertimeColumn(),
             'show_cp_extras_column' => $this->companyModel->hasShowCpExtrasColumn(),
         ]);
@@ -936,6 +937,8 @@ class AdminController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             csrf_verify();
             $name = postString('company_name');
+            $locality = postString('locality');
+            $province = postString('province');
             $showOt = null;
             $showCp = null;
             $usesCp = function_exists('company_uses_casapav_tasks') && company_uses_casapav_tasks($id);
@@ -948,6 +951,11 @@ class AdminController {
             if ($name === '') {
                 $_SESSION['flash_error'] = 'El nombre es obligatorio.';
             } elseif ($this->companyModel->updateCompany($id, $name, $showOt, $showCp)) {
+                if ($this->companyModel->locationReady()
+                    && !$this->companyModel->saveLocation($id, $locality, $province)) {
+                    $_SESSION['flash_error'] = 'La empresa se actualizó, pero no se pudo guardar la ubicación.';
+                    redirect('admin/editCompany/' . $id);
+                }
                 if ((int)($_SESSION['user_company_id'] ?? 0) === (int)$id) {
                     $_SESSION['user_company_name'] = $name;
                 }
@@ -960,6 +968,8 @@ class AdminController {
         $usesCp = function_exists('company_uses_casapav_tasks') && company_uses_casapav_tasks($id);
         $this->view('admin/edit_company', [
             'company' => $company,
+            'location' => $this->companyModel->getLocation($id),
+            'location_ready' => $this->companyModel->locationReady(),
             'uses_cp_tasks' => $usesCp,
             'show_overtime_column' => $this->companyModel->hasShowOvertimeColumn(),
             'show_cp_extras_column' => $this->companyModel->hasShowCpExtrasColumn(),

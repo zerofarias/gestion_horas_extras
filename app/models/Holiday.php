@@ -63,7 +63,7 @@ class Holiday {
         return !empty($this->getHolidaysForPeriod($companyId, $date, $date));
     }
 
-    private function scopedRulesReady() {
+    public function isScopedRulesReady() {
         static $ready = null;
         if ($ready !== null) {
             return $ready;
@@ -75,6 +75,51 @@ class Holiday {
             $ready = false;
         }
         return $ready;
+    }
+
+    public function getScopedRules() {
+        if (!$this->isScopedRulesReady()) {
+            return [];
+        }
+        $this->db->query('SELECT * FROM holiday_rules ORDER BY month_day ASC, scope_type ASC, province ASC, locality ASC');
+        return $this->db->resultSet();
+    }
+
+    public function createScopedRule($data) {
+        if (!$this->isScopedRulesReady()) {
+            return false;
+        }
+        $scope = $data['scope_type'] ?? '';
+        if (!in_array($scope, ['national', 'province', 'locality'], true)
+            || !preg_match('/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/', (string)($data['month_day'] ?? ''))
+            || trim((string)($data['name'] ?? '')) === '') {
+            return false;
+        }
+        $province = trim((string)($data['province'] ?? ''));
+        $locality = trim((string)($data['locality'] ?? ''));
+        if (($scope === 'province' || $scope === 'locality') && $province === '') {
+            return false;
+        }
+        if ($scope === 'locality' && $locality === '') {
+            return false;
+        }
+        if ($scope === 'national') {
+            $province = null;
+            $locality = null;
+        } elseif ($scope === 'province') {
+            $locality = null;
+        }
+        $this->db->query('INSERT INTO holiday_rules (name, month_day, scope_type, province, locality, is_active)
+            VALUES (?, ?, ?, ?, ?, 1)');
+        return $this->db->execute([trim($data['name']), $data['month_day'], $scope, $province, $locality]);
+    }
+
+    public function deleteScopedRule($id) {
+        if (!$this->isScopedRulesReady()) {
+            return false;
+        }
+        $this->db->query('DELETE FROM holiday_rules WHERE id = ?');
+        return $this->db->execute([(int)$id]);
     }
 
     private function normalizePlace($value) {
@@ -89,7 +134,7 @@ class Holiday {
     }
 
     private function getScopedHolidaysForPeriod($companyId, $startDate, $endDate) {
-        if ($companyId <= 0 || !$this->scopedRulesReady()) {
+        if ($companyId <= 0 || !$this->isScopedRulesReady()) {
             return [];
         }
         $location = (new Company())->getLocation($companyId);

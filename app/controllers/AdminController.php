@@ -2286,6 +2286,21 @@ class AdminController {
     public function holidays(){
         if($_SERVER['REQUEST_METHOD'] === 'POST'){
             csrf_verify();
+            if (($_POST['holiday_action'] ?? '') === 'create_scoped_rule') {
+                $rule = [
+                    'name' => trim(strip_tags($_POST['name'] ?? '')),
+                    'month_day' => !empty($_POST['rule_date']) ? substr(trim($_POST['rule_date']), 5, 5) : trim($_POST['month_day'] ?? ''),
+                    'scope_type' => trim($_POST['scope_type'] ?? ''),
+                    'province' => trim(strip_tags($_POST['province'] ?? '')),
+                    'locality' => trim(strip_tags($_POST['locality'] ?? '')),
+                ];
+                $ready = $this->holidayModel->isScopedRulesReady();
+                $created = $ready && $this->holidayModel->createScopedRule($rule);
+                $_SESSION[$created ? 'flash_success' : 'flash_error'] = $ready
+                    ? ($created ? 'Regla de feriado guardada.' : 'No se pudo guardar la regla. Revisá alcance, fecha y ubicación.')
+                    : 'Falta ejecutar la migración de reglas geográficas de feriados.';
+                redirect('admin/holidays');
+            }
             $data = [
                 'name' => isset($_POST['name']) ? trim(strip_tags($_POST['name'])) : '',
                 'holiday_date' => isset($_POST['holiday_date']) ? trim($_POST['holiday_date']) : '',
@@ -2300,7 +2315,11 @@ class AdminController {
         }
 
         $holidays = $this->holidayModel->getHolidaysByCompany($_SESSION['user_company_id']);
-        $this->view('admin/holidays', ['holidays' => $holidays]);
+        $this->view('admin/holidays', [
+            'holidays' => $holidays,
+            'scoped_rules_ready' => $this->holidayModel->isScopedRulesReady(),
+            'scoped_rules' => $this->holidayModel->getScopedRules(),
+        ]);
     }
 
     public function deleteHoliday($id){
@@ -2314,6 +2333,21 @@ class AdminController {
             $_SESSION['flash_success'] = 'Feriado eliminado.';
         } else {
             $_SESSION['flash_error'] = 'No se pudo eliminar el feriado.';
+        }
+        redirect('admin/holidays');
+    }
+
+    public function deleteScopedHolidayRule($id) {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('admin/holidays');
+        }
+        csrf_verify();
+        requireAdminOnly('admin/holidays');
+        $id = filter_var($id, FILTER_VALIDATE_INT);
+        if ($id && $this->holidayModel->deleteScopedRule($id)) {
+            $_SESSION['flash_success'] = 'Regla de feriado eliminada.';
+        } else {
+            $_SESSION['flash_error'] = 'No se pudo eliminar la regla de feriado.';
         }
         redirect('admin/holidays');
     }

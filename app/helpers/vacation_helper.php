@@ -39,7 +39,7 @@ function vacation_day_count_modes() {
     ];
 }
 
-function vacation_dates_in_range($startDate, $endDate, $mode, $companyId = 0, $db = null) {
+function vacation_dates_in_range($startDate, $endDate, $mode, $companyId = 0, $db = null, $branchId = 0) {
     $start = new DateTime($startDate);
     $end = new DateTime($endDate ?: $startDate);
     if ($end < $start) {
@@ -47,7 +47,7 @@ function vacation_dates_in_range($startDate, $endDate, $mode, $companyId = 0, $d
     }
     $holidays = [];
     if ($mode === 'business_mon_sat' && (int)$companyId > 0) {
-        foreach ((new Holiday($db))->getHolidaysForPeriod((int)$companyId, $start->format('Y-m-d'), $end->format('Y-m-d')) as $holiday) {
+        foreach ((new Holiday($db))->getHolidaysForPeriod((int)$companyId, $start->format('Y-m-d'), $end->format('Y-m-d'), (int)$branchId) as $holiday) {
             $holidays[$holiday->holiday_date] = true;
         }
     }
@@ -65,8 +65,8 @@ function vacation_dates_in_range($startDate, $endDate, $mode, $companyId = 0, $d
     return $dates;
 }
 
-function vacation_count_days_in_range($startDate, $endDate, $mode, $companyId = 0, $db = null) {
-    return count(vacation_dates_in_range($startDate, $endDate, $mode, $companyId, $db));
+function vacation_count_days_in_range($startDate, $endDate, $mode, $companyId = 0, $db = null, $branchId = 0) {
+    return count(vacation_dates_in_range($startDate, $endDate, $mode, $companyId, $db, $branchId));
 }
 
 function vacation_schedule_entry($notes = '') {

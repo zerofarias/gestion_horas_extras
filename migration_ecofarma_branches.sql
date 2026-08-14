@@ -20,15 +20,12 @@ INSERT INTO company_branches (company_id, name, locality, province, is_active)
 SELECT c.id, seed.name, seed.locality, 'Córdoba', 1
 FROM companies c
 INNER JOIN (
-    SELECT 'Villa María' AS name, 'Villa María' AS locality
-    UNION ALL SELECT 'Córdoba', 'Córdoba'
-    UNION ALL SELECT 'Bell Ville', 'Bell Ville'
-    UNION ALL SELECT 'Marcos Juarez', 'Marcos Juarez'
-    UNION ALL SELECT 'Leones', 'Leones'
-    UNION ALL SELECT 'La Carlota', 'La Carlota'
-    UNION ALL SELECT 'Villa Dolores', 'Villa Dolores'
-    UNION ALL SELECT 'Saira', 'Saira'
-    UNION ALL SELECT 'San Francisco', 'San Francisco'
+    SELECT 'Ecofarma Central' AS name, 'Villa María' AS locality
+    UNION ALL SELECT 'Ecofarma Azul', 'Villa María'
+    UNION ALL SELECT 'Ecofarma Cruz Verde Central', 'San Francisco'
+    UNION ALL SELECT 'Ecofarma Cruz Verde Catedral', 'San Francisco'
+    UNION ALL SELECT 'Ecofarma Cruz Verde Jujuy', 'San Francisco'
+    UNION ALL SELECT 'Ecofarma Dermolife', 'San Francisco'
 ) AS seed
 WHERE c.name = 'Ecofarma'
 ON DUPLICATE KEY UPDATE locality = VALUES(locality), province = VALUES(province), is_active = VALUES(is_active);

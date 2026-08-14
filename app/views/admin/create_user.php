@@ -74,6 +74,7 @@ require APPROOT . '/views/inc/header.php'; ?>
                             <small class="text-muted">Define con quién puede intercambiar turnos (misma empresa).</small>
                         </div>
                     </div>
+                    <?php require APPROOT . '/views/admin/partials/user_branch_field.php'; ?>
                     <?php require APPROOT . '/views/admin/partials/user_area_field.php'; ?>
                     <div class="row">
                          <div class="col-md-6 mb-3">
@@ -104,6 +105,8 @@ require APPROOT . '/views/inc/header.php'; ?>
                     $source = isset($data) ? $data : [];
                     require APPROOT . '/views/admin/partials/user_employment_fields.php';
                     ?>
+
+                    <?php require APPROOT . '/views/admin/partials/user_complete_record_fields.php'; ?>
 
                     <hr>
                     <button type="submit" class="btn btn-success w-100">Guardar Usuario</button>

@@ -84,6 +84,28 @@ function admin_safe_return_path($returnUrl, $default = 'admin/dashboard') {
     return ltrim($path, '/');
 }
 
+/**
+ * Evita volver, tras cambiar de empresa, a una entidad identificada en el
+ * contexto anterior. Las pantallas de colección conservan sus filtros.
+ */
+function admin_company_switch_return_path($returnUrl) {
+    $path = admin_safe_return_path($returnUrl, 'admin/dashboard');
+    $pathOnly = parse_url('/' . ltrim($path, '/'), PHP_URL_PATH) ?: '/';
+    $contextRoutes = [
+        '#^/admin/(?:employeeProfile|employeeDetails|editUser|editEntry|editRequest)/#' => 'admin/users',
+        '#^/admin/editCompany/#' => 'admin/companies',
+        '#^/vacationAdmin/(?:vacationSetup|editAgreement)/#' => 'vacationAdmin/agreements',
+        '#^/salaryAdvanceAdmin/(?:installments|history|receipt)/#' => 'salaryAdvanceAdmin/index',
+        '#^/cpTaskAdmin/closureDetail/#' => 'cpTaskAdmin/reports',
+        '#^/trainingAdmin/(?:courseEdit|previewLesson)/#' => 'trainingAdmin/courses',
+        '#^/surveyAdmin/(?:edit|results)/#' => 'surveyAdmin/index',
+    ];
+    foreach ($contextRoutes as $pattern => $fallback) {
+        if (preg_match($pattern, $pathOnly)) return $fallback;
+    }
+    return $path;
+}
+
 function userBelongsToCompany($userId, $companyId) {
     $userId = (int)$userId;
     $companyId = (int)$companyId;

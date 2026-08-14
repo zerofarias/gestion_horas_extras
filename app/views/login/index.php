@@ -12,7 +12,7 @@ require APPROOT . '/views/inc/header.php';
                  class="login-brand-logo mb-3"
                  width="88"
                  height="88">
-            <h2 class="fw-bold mb-0 login-brand-title"><?php echo htmlspecialchars(SITENAME); ?></h2>
+            <h1 class="h2 fw-bold mb-0 login-brand-title"><?php echo htmlspecialchars(SITENAME); ?></h1>
             <p class="text-muted small mt-1">Gestión de personal y RRHH</p>
         </div>
 
@@ -43,4 +43,3 @@ require APPROOT . '/views/inc/header.php';
 </div>
 
 <?php require APPROOT . '/views/inc/footer.php'; ?>
-

@@ -258,7 +258,13 @@ class Request {
     /**
      * Obtiene las solicitudes aprobadas para el planificador.
      */
-    public function getApprovedRequestsForPeriod($startDate, $endDate, $companyId) {
+    public function getApprovedRequestsForPeriod($startDate, $endDate, $companyId, $branchId = null) {
+        $userModel = new User();
+        $branchReady = $userModel->isBranchAssignmentReady();
+        $multipleBranchReady = $userModel->isMultipleBranchAssignmentsReady();
+        $branchWhere = $multipleBranchReady && (int)$branchId > 0
+            ? ' AND EXISTS (SELECT 1 FROM employee_branch_assignments eba WHERE eba.user_id = u.id AND eba.branch_id = :branch_id)'
+            : (($branchReady && (int)$branchId > 0) ? ' AND u.branch_id = :branch_id' : '');
         $sql = "SELECT 
                     r.*, 
                     u.full_name,
@@ -270,12 +276,15 @@ class Request {
                 WHERE u.company_id = :company_id
                 AND r.status = 'Aprobado'
                 AND r.start_date <= :end_date 
-                AND IFNULL(r.end_date, r.start_date) >= :start_date";
+                AND IFNULL(r.end_date, r.start_date) >= :start_date{$branchWhere}";
 
         $this->db->query($sql);
         $this->db->bind(':company_id', $companyId);
         $this->db->bind(':start_date', $startDate);
         $this->db->bind(':end_date', $endDate);
+        if (($branchReady || $multipleBranchReady) && (int)$branchId > 0) {
+            $this->db->bind(':branch_id', (int)$branchId);
+        }
         
         return $this->db->resultSet();
     }

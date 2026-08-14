@@ -15,6 +15,7 @@ function marcacionesQueryString($filters, $viewMode, $overrides = []) {
         'person_q'    => $filters['person_q'],
         'mapped'      => $filters['mapped'],
         'direction'   => $filters['direction'],
+        'branch_id'   => $filters['branch_id'] ?? 0,
         'view'        => $viewMode,
     ], $overrides);
     return http_build_query(array_filter($q, function ($v) {
@@ -94,6 +95,17 @@ function marcacionesQueryString($filters, $viewMode, $overrides = []) {
                 <input type="date" name="start_date" class="form-control form-control-sm"
                        value="<?php echo htmlspecialchars($filters['start_date']); ?>">
             </div>
+            <?php if (!empty($data['branches'])): ?>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="admin-toolbar-label d-block mb-1">Sucursal</label>
+                <select name="branch_id" class="form-select form-select-sm">
+                    <option value="0">Todas</option>
+                    <?php foreach ($data['branches'] as $branch): ?>
+                    <option value="<?php echo (int)$branch->id; ?>" <?php echo (int)($filters['branch_id'] ?? 0) === (int)$branch->id ? 'selected' : ''; ?>><?php echo htmlspecialchars($branch->name); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
             <div class="col-6 col-md-3 col-lg-2">
                 <label class="admin-toolbar-label d-block mb-1">Hasta</label>
                 <input type="date" name="end_date" class="form-control form-control-sm"

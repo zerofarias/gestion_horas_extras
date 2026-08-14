@@ -512,7 +512,9 @@ class VacationEntitlementService {
         $rule = $this->getApplicableRule($userId, $startDate);
         $mode = $rule ? $rule->day_count_mode : 'weekdays';
         $user = $this->userModel->getUserById((int)$userId);
-        return vacation_count_days_in_range($startDate, $endDate, $mode, (int)($user->company_id ?? 0), $this->db);
+        return vacation_count_days_in_range(
+            $startDate, $endDate, $mode, (int)($user->company_id ?? 0), $this->db, (int)($user->branch_id ?? 0)
+        );
     }
 
     public function addHistoricalBalance($userId, $year, $days, $adminId, $reason) {

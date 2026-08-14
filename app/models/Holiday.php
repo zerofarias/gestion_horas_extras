@@ -16,7 +16,7 @@ class Holiday {
         return $this->db->resultSet();
     }
 
-    public function getHolidaysForPeriod($companyId, $startDate, $endDate) {
+    public function getHolidaysForPeriod($companyId, $startDate, $endDate, $branchId = null) {
         $this->db->query("SELECT * FROM holidays WHERE company_id = :company_id AND holiday_date BETWEEN :start_date AND :end_date");
         $this->db->bind(':company_id', $companyId);
         $this->db->bind(':start_date', $startDate);
@@ -26,7 +26,7 @@ class Holiday {
         foreach ($holidays as $holiday) {
             $byDate[$holiday->holiday_date] = $holiday;
         }
-        foreach ($this->getScopedHolidaysForPeriod((int)$companyId, $startDate, $endDate) as $holiday) {
+        foreach ($this->getScopedHolidaysForPeriod((int)$companyId, $startDate, $endDate, $branchId) as $holiday) {
             if (!isset($byDate[$holiday->holiday_date])) {
                 $byDate[$holiday->holiday_date] = $holiday;
             }
@@ -54,13 +54,13 @@ class Holiday {
         return $this->db->execute([(int)$id, (int)$companyId]);
     }
 
-    public function isHolidayForCompany($companyId, $date) {
+    public function isHolidayForCompany($companyId, $date, $branchId = null) {
         $companyId = (int)$companyId;
         $date = trim((string)$date);
         if ($companyId <= 0 || $date === '') {
             return false;
         }
-        return !empty($this->getHolidaysForPeriod($companyId, $date, $date));
+        return !empty($this->getHolidaysForPeriod($companyId, $date, $date, $branchId));
     }
 
     public function isScopedRulesReady() {
@@ -133,11 +133,12 @@ class Holiday {
         return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
     }
 
-    private function getScopedHolidaysForPeriod($companyId, $startDate, $endDate) {
+    private function getScopedHolidaysForPeriod($companyId, $startDate, $endDate, $branchId = null) {
         if ($companyId <= 0 || !$this->isScopedRulesReady()) {
             return [];
         }
-        $location = (new Company())->getLocation($companyId);
+        $company = new Company();
+        $location = (int)$branchId > 0 ? $company->getBranchByIdForCompany((int)$branchId, $companyId, true) : $company->getLocation($companyId);
         if (!$location) {
             return [];
         }

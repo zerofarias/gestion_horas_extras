@@ -30,7 +30,7 @@ Este documento está dirigido a desarrolladores, administradores y agentes nuevo
 
 | Dominio | Funciones principales | Estado observado |
 | --- | --- | --- |
-| Empresas y áreas | Alta/edición de empresas, áreas globales o por empresa y selección de empresa activa | Funcional |
+| Empresas, sucursales y áreas | Alta/edición de empresas, sucursales o subempresas operativas, áreas globales o por empresa y selección de empresa activa | Funcional |
 | Usuarios y legajo | Datos personales, laborales, empresa, área, convenio, fecha de ingreso, estado y documentos | Funcional |
 | Planificación | Semana, turnos partidos, plantillas, patrones, vacaciones/licencias y cambios de turno | Funcional |
 | Marcaciones | Sincronización, mapeo de reloj a usuario, caché, entradas/salidas y dispositivos | Funcional si la API está configurada |
@@ -127,6 +127,44 @@ Ejemplos:
 /vacationAdmin/reports  -> VacationAdminController::reports()
 ```
 
+### Interfaz, navegación y diseño visual
+
+El layout compartido vive en `app/views/inc/header.php` y
+`app/views/inc/footer.php`; los estilos generales están en
+`public/css/style.css`. La interfaz utiliza Bootstrap 5 como base, un sidebar
+oscuro, acento rosa para la identidad general y azul para superficies de
+administración. Algunos módulos agregan hojas específicas:
+
+- `public/css/notifications.css`
+- `public/css/learning.css`
+- `public/css/prode.css`
+
+Reglas que deben preservarse al crear o modificar pantallas:
+
+- El selector del navbar representa la **empresa activa de todo el panel** y
+  debe permanecer visible en desktop y mobile.
+- La marca, el nombre del footer y el título de la pestaña se derivan del
+  contexto activo cuando corresponde.
+- Al cambiar de empresa se conserva la pantalla de colección actual. Si la URL
+  identifica una ficha o recurso de la empresa anterior, se vuelve a su
+  listado para no mezclar contextos.
+- Los estados activos del sidebar comparan segmentos completos de ruta; no usar
+  coincidencias parciales que puedan activar dos opciones simultáneamente.
+- Los botones del menú móvil mantienen `aria-expanded`, permiten cerrar con
+  `Escape` y devuelven el foco al disparador.
+- Toda navegación interactiva debe conservar foco visible. Las animaciones y
+  transiciones deben respetar `prefers-reduced-motion`.
+- El documento debe tener un único `h1` y una jerarquía posterior coherente.
+- En móvil, los controles táctiles principales deben medir aproximadamente
+  44 px o más y la página no debe generar scroll horizontal.
+- Evitar nuevos atributos `style` y bloques `<style>` dentro de vistas; preferir
+  clases reutilizables y variables de `style.css`.
+
+Las dependencias visuales se cargan desde el layout. Deben fijarse a una versión
+concreta y comprobarse por HTTP antes de actualizar. FullCalendar 6 carga sus
+estilos desde el bundle JavaScript; no agregar `main.min.css`, ya que esa ruta
+no existe en la distribución utilizada.
+
 ## 5. Roles, permisos y aislamiento
 
 ### `admin`
@@ -174,7 +212,7 @@ La siguiente lista muestra las rutas más importantes. Los métodos que modifica
 | --- | --- |
 | `GET /login` | Formulario de ingreso |
 | `POST /login/process` | Autenticación |
-| `/login/logout` | Cierre de sesión |
+| `POST /login/logout` | Cierre de sesión; exige token CSRF |
 
 El formato actual del ingreso es `usuario+contraseña` dentro de un único campo de tipo password.
 
@@ -183,7 +221,7 @@ El formato actual del ingreso es `usuario+contraseña` dentro de un único campo
 | Ruta | Uso |
 | --- | --- |
 | `/admin/dashboard` | Panel general |
-| `/admin/setCompany` | Cambiar empresa activa |
+| `POST /admin/setCompany` | Cambiar empresa activa; exige token CSRF |
 | `/admin/users` | Listado de empleados |
 | `/admin/createUser` | Alta de usuario |
 | `/admin/editUser/{id}` | Edición de usuario |
@@ -358,10 +396,105 @@ No se incluye un esquema completo porque las migraciones fuente están ausentes.
 ### Identidad y organización
 
 - `companies`
+- `company_locations`
+- `company_branches`
+- `employee_branch_assignments`
 - `areas`
 - `users`
 - `user_clock_mappings`
 - `user_login_logs`
+
+#### Empresas, sucursales y subempresas
+
+Una empresa registrada en `companies` puede contener una o más unidades operativas en
+`company_branches`. En la interfaz se las llama **sucursales**, aunque también sirven
+para representar una **subempresa** que dependa operativamente de una empresa principal.
+
+```text
+Empresa: Ecofarma
+├─ Sucursal: Ecofarma Central — Villa María — Córdoba
+├─ Sucursal: Ecofarma Azul — Villa María — Córdoba
+├─ Sucursal: Ecofarma Cruz Verde Central — San Francisco — Córdoba
+├─ Sucursal: Ecofarma Cruz Verde Catedral — San Francisco — Córdoba
+├─ Sucursal: Ecofarma Cruz Verde Jujuy — San Francisco — Córdoba
+└─ Sucursal: Ecofarma Dermolife — San Francisco — Córdoba
+```
+
+- `company_branches.company_id` identifica la empresa principal.
+- Cada sucursal guarda `name`, `locality`, `province` e `is_active`.
+- La administración se realiza desde `/admin/editCompany/{id}`: el primer campo de cada fila es el nombre real de la sucursal; localidad y provincia se eligen por separado.
+- Quitar una fila de la pantalla la desactiva en lugar de borrarla, para conservar referencias e historial futuros.
+- `company_locations` sigue representando la ubicación general o principal de la empresa; no reemplaza a sus sucursales.
+
+El aislamiento principal de RR. HH. continúa siendo por `users.company_id`, y las sedes
+operativas se asignan mediante `employee_branch_assignments`. Un empleado puede pertenecer
+a una o más sucursales de su empresa; una de ellas queda marcada como principal y se conserva
+en `users.branch_id` por compatibilidad y para reglas generales (por ejemplo, vacaciones).
+
+- La asignación se gestiona desde `/admin/editUser/{id}`: se marcan todas las sedes donde trabaja el empleado y se elige una principal.
+- `/admin/weeklyPlanner` agrega un selector de sucursal dentro de la empresa activa. Solo muestra los empleados asignados a esa sede y guarda cada horario con su `branch_id`.
+- Esto permite planificar a una misma persona por la mañana en una sucursal y por la tarde en otra: cada horario mantiene la sede en la que fue creado.
+- Las solicitudes aprobadas y las plantillas aplicadas desde el planificador se filtran por la sede seleccionada. Los feriados geográficos se resuelven con la localidad de esa sucursal.
+- Los empleados que todavía no tienen una asignación de sucursal deben completarse desde Usuarios antes de aparecer en el planificador de una sede.
+
+Migraciones requeridas, en este orden:
+
+1. `migration_ecofarma_branches.sql` (catálogo de sucursales).
+2. `migration_branch_planner_scope.sql` (columna de sucursal en usuarios y horarios).
+3. `migration_employee_multiple_branches.sql` (asignaciones múltiples; migra la sucursal principal existente).
+
+#### Legajo integral, multiempresa laboral y cobertura médica
+
+La migración `migration_employee_record_complete.sql` agrega una capa de legajo
+normalizada sin romper los campos históricos de `users`. Mientras el resto del sistema
+continúa usando `users.company_id`, `users.area_id` y `users.branch_id` como contexto
+principal, la ficha puede conservar otras relaciones laborales y su vigencia.
+
+El módulo incorpora:
+
+- `job_positions`: catálogo de puestos globales o por empresa;
+- `employee_company_assignments`: empresa, legajo, puesto, área, convenio, supervisor,
+  modalidad, contratación, centro de costo, estado y fechas de cada relación laboral;
+- `employee_addresses`: domicilio estructurado, texto original, coordenadas, precisión y
+  estado de verificación;
+- `health_insurers` y `health_insurance_plans`: catálogo administrable de obras sociales,
+  prepagas, mutuales y planes;
+- `employee_health_coverages`: afiliación, plan, número, carácter, aportes, vigencia y estado.
+
+La edición vive en `/admin/editUser/{id}`, la consulta consolidada en la pestaña
+**Legajo** de `/admin/employeeProfile/{id}` y los catálogos en
+`/admin/employeeCatalogs`. Alta y edición siguen funcionando aunque la migración no esté
+instalada: los campos ampliados se deshabilitan con una advertencia.
+
+Reglas importantes:
+
+- `admin`, `supervisor` y `empleado` son roles de acceso; el puesto/cargo se guarda por
+  separado y no concede permisos.
+- `users.is_active` habilita el inicio de sesión; el estado laboral (`preingreso`,
+  `activo`, `licencia`, `suspendido`, `finalizado`) describe la relación laboral y no debe
+  reemplazar silenciosamente el estado de la cuenta.
+- Puede haber varias relaciones con empresas, pero solo una es principal. El aislamiento
+  actual de los módulos operativos continúa guiándose por esa empresa principal.
+- Las asignaciones a sucursales siguen siendo N:M dentro de la empresa principal mediante
+  `employee_branch_assignments`; una sede queda marcada como principal.
+- Los nombres comerciales iniciales de coberturas son referencias editables. RR. HH. debe
+  verificar razón social, RNOS/código oficial, CUIT y plan antes de derivar aportes.
+- Guardar una dirección estructurada actualiza también `users.address` para conservar las
+  pantallas legacy.
+- Las coordenadas del domicilio son información personal restringida. No deben exponerse a
+  supervisores ni utilizarse como control automático de asistencia sin política, fundamento
+  legal y autorización explícita.
+
+Aplicación, luego de backup y de las migraciones históricas:
+
+```powershell
+Get-Content -Raw migration_employee_record_complete.sql |
+  C:\xamppcubo\mysql\bin\mysql.exe -u root -D paviotti_lanaturaleza --default-character-set=utf8mb4
+```
+
+La migración crea las tablas con `IF NOT EXISTS`, precarga nombres comerciales mediante
+upsert y migra la empresa principal actual solo cuando aún no existe esa relación. No elimina ni sobrescribe
+relaciones laborales históricas.
 
 ### Horarios, reloj y asistencia
 
@@ -372,6 +505,8 @@ No se incluye un esquema completo porque las migraciones fuente están ausentes.
 - `schedules`
 - `attendance_day_summary`
 - `attendance_justifications`
+
+En `/admin/weeklyPlanner`, el botón **Jornada L–V** toma una fecha base con el turno correcto y la replica en todos los lunes a viernes de un rango de hasta 93 días. Es útil para jornadas fijas (por ejemplo, una persona que trabaja siempre de lunes a viernes). La operación respeta la sucursal seleccionada: no borra ni reemplaza horarios que el mismo empleado tenga ese día en otra sede.
 - `holidays`
 - `shift_swaps`
 
@@ -607,6 +742,13 @@ Los valores viven en `system_settings` y `mail_settings`. Actualmente algunos se
 - catálogos y relojes;
 - sucursales y comisiones Ecofarma.
 
+#### Alcance de dispositivos y personas
+
+- Ejecutar `migration_clock_devices_scope.sql` para registrar cada dispositivo y asignarlo a una o más sucursales. Una sucursal determina indirectamente la empresa del reloj.
+- Las personas **no** necesitan tener un ID de reloj: solo se crea un mapeo para quien efectivamente ficha.
+- El mapeo nuevo se identifica por **dispositivo + legajo**. Así una persona que rota por varias sucursales puede tener uno o varios legajos, incluso si otro reloj reutiliza el mismo número.
+- `admin/marcacionesTodas` filtra las fichadas sin mapear por el alcance del reloj y ofrece filtro de sucursal. Un reloj sin sucursal asignada permanece sin adjudicar: debe revisarse desde **Relojes y sucursales**.
+
 El default histórico usa HTTP. En producción debe utilizarse HTTPS con certificado válido. No transmitir credenciales, tokens ni marcaciones por HTTP plano.
 
 ### Base externa Casa Paviotti
@@ -731,7 +873,7 @@ Referencia oficial: <https://www.argentina.gob.ar/normativa/nacional/ley-20744-2
 - `migration_prode_wc2026.sql`
 - y más migraciones intermedias.
 
-La mayoría de esos archivos históricos no están actualmente en el repositorio. `migration_vacation_management_v2.sql` sí está versionada, documentada en `MIGRATIONS.md` e incorporada como paso 38 del generador de hosting.
+La mayoría de esos archivos históricos no están actualmente en el repositorio. `migration_vacation_management_v2.sql` sí está versionada y se incorpora como paso 38 del generador de hosting; `migration_employee_record_complete.sql` se incorpora como paso 39.
 
 Plan recomendado:
 
@@ -804,6 +946,37 @@ curl.exe -I http://localhost/gestion_horas_extras/
 
 En producción reemplazar por HTTPS y comprobar las cabeceras de seguridad.
 
+### QA visual y de navegación
+
+Probar como mínimo anchos de 375, 768, 992 y 1440 px, con una sesión de cada
+rol. Para administración, repetir las pantallas principales después de cambiar
+de empresa desde el navbar.
+
+- No debe existir desborde horizontal en login, topbar, tablas encapsuladas o
+  navegación inferior.
+- El selector de empresa debe estar visible y mostrar la empresa activa también
+  en mobile.
+- El cambio desde una ficha individual debe volver a un listado coherente; no
+  debe intentar mostrar el ID perteneciente a la empresa anterior.
+- Solo una entrada del sidebar debe aparecer activa.
+- El menú móvil debe abrir, cerrar por botón, overlay y tecla `Escape`, y
+  actualizar `aria-expanded`.
+- Tabular con teclado debe producir un indicador de foco visible.
+- Activar la preferencia de reducción de movimiento del sistema y comprobar que
+  no queden animaciones prolongadas.
+- Revisar la consola y la pestaña Network: no debe aparecer el antiguo 404 de
+  `fullcalendar@6.1.11/main.min.css`.
+- Verificar que cerrar sesión emita `POST`; acceder a `/login/logout` mediante
+  `GET` no debe destruir una sesión.
+
+Comandos rápidos para detectar regresiones conocidas:
+
+```powershell
+rg -n 'href=.*login/logout' app\views -g '*.php'
+rg -n 'fullcalendar.*\.css' app public -g '*.php' -g '*.css'
+git diff --check
+```
+
 ### Búsqueda de referencias a migraciones faltantes
 
 ```powershell
@@ -847,6 +1020,12 @@ git ls-files | rg -i '(dni|document|recibo|signature|certificate|\.sql$|\.env$)'
 - Documentar estados y transiciones de solicitudes, horas, cierres, adelantos y recibos.
 - Crear pruebas de integración con una base efímera.
 - Añadir CI para lint, pruebas y validación de Composer.
+- Reducir estilos inline históricos y dividir `public/css/style.css` por capas o
+  dominios sin perder los tokens compartidos.
+- Cargar librerías pesadas únicamente en las vistas que las utilizan y evaluar
+  una estrategia local para no depender por completo de CDNs.
+- Unificar progresivamente Font Awesome y Bootstrap Icons para evitar
+  diferencias de grosor y alineación.
 
 ### Producto
 
@@ -881,6 +1060,10 @@ git ls-files | rg -i '(dni|document|recibo|signature|certificate|\.sql$|\.env$)'
 - [ ] Existe backup y rollback.
 - [ ] Login y permisos funcionan para los tres roles.
 - [ ] El aislamiento por empresa y área fue probado.
+- [ ] El selector de empresa funciona en desktop y mobile, y no conserva IDs de otra empresa.
+- [ ] No hay rutas visuales con 404 ni errores nuevos en la consola.
+- [ ] Sidebar, topbar y navegación inferior tienen foco visible y funcionan con teclado.
+- [ ] Logout usa POST con CSRF desde todas sus ubicaciones.
 - [ ] Los archivos sensibles no son accesibles directamente.
 - [ ] Las integraciones utilizan TLS.
 - [ ] El smoke test pasa.

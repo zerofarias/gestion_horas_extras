@@ -465,6 +465,27 @@ body {
     gap: .6rem;
 }
 
+.topbar-right {
+    min-width: 0;
+}
+
+.topbar-company-form {
+    min-width: 0;
+}
+
+.topbar-company-form .form-select {
+    width: clamp(112px, 18vw, 200px);
+    max-width: 200px;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 575px) {
+    .app-topbar { padding: 0 .55rem; }
+    .topbar-right { gap: .25rem; }
+    .topbar-company-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .topbar-company-form .form-select { width: min(34vw, 132px); }
+}
+
 .topbar-toggle {
     background: none;
     border: none;
@@ -572,6 +593,23 @@ body {
     font-weight: 700;
     transition: background var(--tr), color var(--tr);
     flex-shrink: 0;
+}
+
+.topbar-logout-btn,
+.sidebar-logout-btn,
+.emp-bnav-item--logout {
+    font-family: inherit;
+}
+
+.sidebar-nav-link:focus-visible,
+.sidebar-logout-btn:focus-visible,
+.topbar-toggle:focus-visible,
+.topbar-notify-btn:focus-visible,
+.topbar-logout-btn:focus-visible,
+.topbar-avatar-shell:focus-visible,
+.emp-bnav-item:focus-visible {
+    outline: 3px solid rgba(6, 182, 212, .8);
+    outline-offset: 2px;
 }
 
 .topbar-logout-label {
@@ -3892,6 +3930,17 @@ div.dt-buttons .btn.btn-info:hover {
     box-shadow: 0 -4px 20px rgba(0, 0, 0, .25);
 }
 
+.emp-bnav-logout-form {
+    flex: 1;
+    display: flex;
+    margin: 0;
+}
+
+.emp-bnav-logout-form .emp-bnav-item {
+    width: 100%;
+    background: transparent;
+}
+
 .emp-bnav-item {
     flex: 1;
     display: flex;
@@ -4690,4 +4739,15 @@ body.portal-casapav .emp-bnav-item--logout:hover {
 @media (max-width: 768px) {
     .cal-cell { min-height: 64px; font-size: .7rem; }
     .cal-cell-shift { display: none; }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

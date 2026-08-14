@@ -20,6 +20,8 @@ class AdminController {
     private $justificationModel;
     private $shiftSwapModel;
     private $employeeIncidentModel;
+    private $clockDeviceModel;
+    private $employeeRecordModel;
 
     public function __construct(){
         if (!isStaffAdmin()) {
@@ -44,6 +46,8 @@ class AdminController {
         $this->justificationModel = new AttendanceJustification();
         $this->shiftSwapModel = new ShiftSwap();
         $this->employeeIncidentModel = new EmployeeIncident();
+        $this->clockDeviceModel = new ClockDevice();
+        $this->employeeRecordModel = new EmployeeRecord();
         ensureAdminCompanySession();
     }
 
@@ -67,7 +71,7 @@ class AdminController {
             $_SESSION['flash_success'] = 'Empresa activa actualizada.';
         }
         $return = trim($_POST['return_url'] ?? '');
-        redirect(admin_safe_return_path($return, 'admin/dashboard'));
+        redirect(admin_company_switch_return_path($return));
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -90,6 +94,38 @@ class AdminController {
             'company_id' => $companyId,
             'all_users' => $allUsers,
         ]);
+    }
+
+    /** Catálogo de dispositivos y sucursales donde pueden usarse. */
+    public function clockDevices() {
+        requireAdminOnly();
+        if (!$this->clockDeviceModel->isReady()) {
+            $_SESSION['flash_error'] = 'Falta ejecutar migration_clock_devices_scope.sql.';
+            redirect('admin/marcacionesTodas');
+        }
+        $companies = $this->companyModel->getAllCompanies();
+        $branches = [];
+        foreach ($companies as $company) {
+            foreach ($this->companyModel->getBranches((int)$company->id, false) as $branch) $branches[] = $branch;
+        }
+        $this->view('admin/clock_devices', [
+            'devices' => $this->clockDeviceModel->getAllWithScopes(),
+            'branches' => $branches,
+            'companies' => $companies,
+        ]);
+    }
+
+    public function saveClockDevice() {
+        requireAdminOnly();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') redirect('admin/clockDevices');
+        csrf_verify();
+        if (!$this->clockDeviceModel->isReady()) redirect('admin/clockDevices');
+        $ok = $this->clockDeviceModel->save(
+            (int)($_POST['id'] ?? 0), $_POST['external_name'] ?? '', $_POST['display_name'] ?? '',
+            $_POST['branch_ids'] ?? [], !empty($_POST['is_active'])
+        );
+        $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok ? 'Reloj y sucursales actualizados.' : 'No se pudo guardar el reloj. Revisá el nombre y las sucursales.';
+        redirect('admin/clockDevices');
     }
 
     public function mapeoApi() {
@@ -164,6 +200,7 @@ class AdminController {
         requireUserInAdminCompany($userId, 'admin/mapeoApi');
 
         $this->userModel->upsertClockMapping($userId, $deviceName ?: 'API', $employeeID);
+        $this->marcacionesCacheModel->assignMappedUser($employeeID, $deviceName, $userId);
 
         $user = $this->userModel->getUserById($userId);
         $name = $user ? $user->full_name : "ID {$userId}";
@@ -188,11 +225,11 @@ class AdminController {
 
         if (!empty($employeeID)) {
             $companyId = requireAdminCompany('admin/mapeoApi');
-            $mappingUserId = $this->userModel->getUserIdByClockEmployeeId($employeeID);
+            $mappingUserId = $this->userModel->getUserIdByClockEmployeeId($employeeID, trim($_POST['device_name'] ?? ''));
             if ($mappingUserId && !userBelongsToCompany($mappingUserId, $companyId)) {
                 $_SESSION['flash_error'] = 'No tenés permiso para eliminar ese mapeo.';
             } else {
-                $this->userModel->deleteClockMapping($employeeID);
+                $this->userModel->deleteClockMapping($employeeID, trim($_POST['device_name'] ?? ''));
                 $_SESSION['flash_success_html'] = "Mapeo del ID <strong>" . htmlspecialchars($employeeID) . "</strong> eliminado.";
             }
         }
@@ -325,11 +362,13 @@ class AdminController {
             'person_q'     => trim($_GET['person_q'] ?? ''),
             'mapped'       => $_GET['mapped']       ?? '',
             'direction'    => $_GET['direction']    ?? '',
+            'branch_id'    => (int)($_GET['branch_id'] ?? 0),
         ];
 
         $companyId = requireAdminCompany('admin/dashboard');
         $marcaciones = $this->marcacionesCacheModel->getAll($filters, $companyId);
         $devices     = $this->marcacionesCacheModel->getDistinctDevices($companyId);
+        $branches    = $this->companyModel->getBranches($companyId, false);
         $stats       = $this->marcacionesCacheModel->getStats($filters, $companyId);
         $groups      = marcBuildPersonDayGroups($marcaciones);
 
@@ -337,6 +376,7 @@ class AdminController {
             'marcaciones' => $marcaciones,
             'groups'      => $groups,
             'devices'     => $devices,
+            'branches'    => $branches,
             'filters'     => $filters,
             'stats'       => $stats,
             'view_mode'   => $viewMode,
@@ -939,6 +979,7 @@ class AdminController {
             $name = postString('company_name');
             $locality = postString('locality');
             $province = postString('province');
+            $branches = isset($_POST['branches']) && is_array($_POST['branches']) ? $_POST['branches'] : [];
             $showOt = null;
             $showCp = null;
             $usesCp = function_exists('company_uses_casapav_tasks') && company_uses_casapav_tasks($id);
@@ -956,6 +997,11 @@ class AdminController {
                     $_SESSION['flash_error'] = 'La empresa se actualizó, pero no se pudo guardar la ubicación.';
                     redirect('admin/editCompany/' . $id);
                 }
+                if ($this->companyModel->branchesReady()
+                    && !$this->companyModel->saveBranches($id, $branches)) {
+                    $_SESSION['flash_error'] = 'La empresa se actualizó, pero revisá que cada sucursal tenga nombre, localidad y provincia.';
+                    redirect('admin/editCompany/' . $id);
+                }
                 if ((int)($_SESSION['user_company_id'] ?? 0) === (int)$id) {
                     $_SESSION['user_company_name'] = $name;
                 }
@@ -970,6 +1016,8 @@ class AdminController {
             'company' => $company,
             'location' => $this->companyModel->getLocation($id),
             'location_ready' => $this->companyModel->locationReady(),
+            'branches' => $this->companyModel->getBranches($id, false),
+            'branches_ready' => $this->companyModel->branchesReady(),
             'uses_cp_tasks' => $usesCp,
             'show_overtime_column' => $this->companyModel->hasShowOvertimeColumn(),
             'show_cp_extras_column' => $this->companyModel->hasShowCpExtrasColumn(),
@@ -1137,6 +1185,8 @@ class AdminController {
                 'confirm_password' => isset($_POST['confirm_password']) ? trim($_POST['confirm_password']) : '',
                 'role' => isset($_POST['role']) ? $_POST['role'] : 'empleado',
                 'company_id' => isset($_POST['company_id']) ? (int)$_POST['company_id'] : 0,
+                'branch_id' => isset($_POST['branch_id']) ? (int)$_POST['branch_id'] : 0,
+                'branch_ids' => isset($_POST['branch_ids']) && is_array($_POST['branch_ids']) ? $_POST['branch_ids'] : [],
                 'employee_group' => User::normalizeOrganizationGroup($_POST['employee_group'] ?? 'paviotti'),
                 'profile_picture' => 'default.png',
                 'errors' => [],
@@ -1145,7 +1195,10 @@ class AdminController {
                 'probation_start_date' => trim($_POST['probation_start_date'] ?? ''),
                 'hire_date' => trim($_POST['hire_date'] ?? ''),
                 'agreement_id' => isset($_POST['agreement_id']) ? (int)$_POST['agreement_id'] : 0,
-            ]);
+            ], EmployeeRecord::fromPost($_POST));
+            if ($this->employeeRecordModel->isReady()) {
+                $data['errors'] = array_merge($data['errors'], $this->employeeRecordModel->validate($data, $data['company_id'], 0));
+            }
             if (empty($data['first_name'])) {
                 $data['errors']['first_name'] = 'Los nombres son obligatorios.';
             }
@@ -1157,6 +1210,7 @@ class AdminController {
                 $data['errors']['email'] = 'Email no válido.';
             }
             if ($data['company_id'] <= 0) { $data['errors']['company_id'] = 'Seleccioná la empresa del usuario.'; }
+            $this->validateUserBranch($data);
             $this->validateUserArea($data);
             if($this->userModel->findUserByUsername($data['username'])){ $data['errors']['username'] = 'Este nombre de usuario ya está en uso.'; }
             if(strlen($data['password']) < 4){ $data['errors']['password'] = 'La contraseña debe tener al menos 4 caracteres.'; }
@@ -1184,20 +1238,24 @@ class AdminController {
             if(empty($data['errors'])){
                 $data['password_hash'] = password_hash($data['password'], PASSWORD_DEFAULT);
                 if($this->userModel->createUser($data)){
+                    $createdUser = $this->userModel->getUserByUsername($data['username']);
+                    if ($createdUser && !$this->employeeRecordModel->save((int)$createdUser->id, $data['company_id'], $data['area_id'], $data['agreement_id'], $data['hire_date'], $data)) {
+                        $_SESSION['flash_error'] = 'El usuario fue creado, pero no se pudo completar el legajo ampliado.';
+                    }
                     $_SESSION['flash_success'] = 'Usuario creado con éxito.';
                     redirect('admin/users');
                 }
             } else {
                 $data['companies'] = $this->companyModel->getAllCompanies();
                 $data['default_company_id'] = $this->companyModel->getDefaultCompanyId();
-                $this->view('admin/create_user', array_merge($data, $this->employmentViewData(0, $data)));
+                $this->view('admin/create_user', array_merge($data, $this->employmentViewData(0, $data), $this->employeeRecordViewData(0, $data['company_id'])));
             }
         } else {
             $this->view('admin/create_user', array_merge([
                 'errors' => [],
                 'companies' => $this->companyModel->getAllCompanies(),
                 'default_company_id' => $this->companyModel->getDefaultCompanyId(),
-            ], $this->employmentViewData()));
+            ], $this->employmentViewData(), $this->employeeRecordViewData(0, (int)($this->companyModel->getDefaultCompanyId() ?? 0))));
         }
     }
     
@@ -1215,6 +1273,8 @@ class AdminController {
                 'id' => $id,
                 'role' => isset($_POST['role']) ? $_POST['role'] : 'empleado',
                 'company_id' => $companyId,
+                'branch_id' => isset($_POST['branch_id']) ? (int)$_POST['branch_id'] : 0,
+                'branch_ids' => isset($_POST['branch_ids']) && is_array($_POST['branch_ids']) ? $_POST['branch_ids'] : [],
                 'employee_group' => User::normalizeOrganizationGroup($_POST['employee_group'] ?? 'paviotti'),
                 'hourly_rate' => isset($_POST['hourly_rate']) ? trim($_POST['hourly_rate']) : 0,
                 'weekly_hour_limit' => isset($_POST['weekly_hour_limit']) ? trim($_POST['weekly_hour_limit']) : '',
@@ -1230,7 +1290,10 @@ class AdminController {
             ], name_from_post($_POST), User::profileFromPost($_POST), [
                 'area_id' => isset($_POST['area_id']) ? (int)$_POST['area_id'] : 0,
                 'plex_operator_name' => trim($_POST['plex_operator_name'] ?? ''),
-            ]);
+            ], EmployeeRecord::fromPost($_POST));
+            if ($this->employeeRecordModel->isReady()) {
+                $data['errors'] = array_merge($data['errors'], $this->employeeRecordModel->validate($data, $companyId, $id));
+            }
             if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
                 $data['errors']['email'] = 'Email no válido.';
             }
@@ -1265,6 +1328,7 @@ class AdminController {
             } elseif (!$this->companyModel->getById($data['company_id'])) {
                 $data['errors']['company_id'] = 'La empresa seleccionada no existe.';
             }
+            $this->validateUserBranch($data);
             $this->validateUserArea($data);
             if(!empty($data['password'])){
                 if(strlen($data['password']) < 4){ $data['errors']['password'] = 'La contraseña debe tener al menos 4 caracteres.'; }
@@ -1278,6 +1342,12 @@ class AdminController {
                 // Primero el update del usuario; los mapeos (que borran y reinsertan) solo si aquel funcionó.
                 if(!$this->userModel->updateUser($data)){
                     die('Algo salió mal al actualizar el usuario.');
+                }
+                if(!$this->userModel->saveBranchAssignments($id, $data['company_id'], $data['branch_ids'], $data['branch_id'])){
+                    die('Error al guardar las sucursales del usuario.');
+                }
+                if(!$this->employeeRecordModel->save($id, $data['company_id'], $data['area_id'], $data['agreement_id'], $data['hire_date'], $data)){
+                    die('Error al guardar el legajo ampliado del usuario.');
                 }
                 if(!$this->userModel->saveClockMappings($id, $clockMappings)){
                     die('Error al guardar los IDs de los relojes.');
@@ -1293,6 +1363,7 @@ class AdminController {
                 $user = $this->userModel->getUserById($id);
                 if ($user) {
                     $user->company_id = $data['company_id'];
+                    $user->branch_id = !empty($data['branch_id']) ? (int)$data['branch_id'] : null;
                     $user->area_id = !empty($data['area_id']) ? (int)$data['area_id'] : null;
                     $user->employee_group = $data['employee_group'];
                 }
@@ -1301,7 +1372,7 @@ class AdminController {
                 $data['clock_mappings'] = $clockMappings;
                 $data['companies'] = $this->companyModel->getAllCompanies();
                 $data['current_company_name'] = $this->companyModel->getNameById($data['company_id']);
-                $this->view('admin/edit_user', array_merge($data, $this->employmentViewData($id, $user)));
+                $this->view('admin/edit_user', array_merge($data, $this->employmentViewData($id, $user), $this->employeeRecordViewData($id, $data['company_id'])));
             }
         } else {
             $user = $this->userModel->getUserById($id);
@@ -1316,7 +1387,7 @@ class AdminController {
                 'current_company_name' => $this->companyModel->getNameById($user->company_id),
                 'errors' => array()
             );
-            $this->view('admin/edit_user', array_merge($data, $this->employmentViewData($id, $user)));
+            $this->view('admin/edit_user', array_merge($data, $this->employmentViewData($id, $user), $this->employeeRecordViewData($id, (int)$user->company_id)));
         }
     }
 
@@ -1345,6 +1416,35 @@ class AdminController {
             $_SESSION['flash_error'] = 'No se pudo cambiar el estado del usuario.';
         }
         redirect('admin/users');
+    }
+
+    public function employeeCatalogs() {
+        requireAdminOnly();
+        $companyId = requireAdminCompany('admin/users');
+        if (!$this->employeeRecordModel->isReady()) {
+            $_SESSION['flash_error'] = 'Falta ejecutar migration_employee_record_complete.sql.';
+            redirect('admin/users');
+        }
+        $this->view('admin/employee_catalogs', [
+            'positions' => $this->employeeRecordModel->getPositions($companyId),
+            'insurers' => $this->employeeRecordModel->getInsurers(),
+            'plans' => $this->employeeRecordModel->getPlans(),
+            'company_id' => $companyId,
+        ]);
+    }
+
+    public function saveEmployeeCatalog() {
+        requireAdminOnly();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') redirect('admin/employeeCatalogs');
+        csrf_verify();
+        $companyId = requireAdminCompany('admin/employeeCatalogs');
+        $kind = trim((string)($_POST['kind'] ?? ''));
+        $ok = false;
+        if ($kind === 'position') $ok = $this->employeeRecordModel->savePosition($companyId, $_POST['name'] ?? '', $_POST['description'] ?? '');
+        if ($kind === 'insurer') $ok = $this->employeeRecordModel->saveInsurer($_POST['display_name'] ?? '', $_POST['legal_name'] ?? '', $_POST['insurer_type'] ?? 'otra');
+        if ($kind === 'plan') $ok = $this->employeeRecordModel->savePlan((int)($_POST['health_insurer_id'] ?? 0), $_POST['name'] ?? '', $_POST['code'] ?? '');
+        $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok ? 'Catálogo actualizado.' : 'No se pudo guardar. Revisá los datos.';
+        redirect('admin/employeeCatalogs');
     }
 
     public function requests(){
@@ -1941,7 +2041,7 @@ class AdminController {
             // Fix 5: verificar token CSRF
             csrf_verify();
             $schedules = isset($_POST['schedules']) ? $_POST['schedules'] : array();
-            $plannerResult = $this->savePlannerSchedulesWithVacationLedger($schedules);
+            $plannerResult = $this->savePlannerSchedulesWithVacationLedger($schedules, (int)($_POST['branch_id'] ?? 0));
             if (!$plannerResult['ok']) {
                 $_SESSION['flash_error'] = $plannerResult['message'];
             } else {
@@ -1952,7 +2052,8 @@ class AdminController {
             if(!preg_match('/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/', $redir_week)){
                 $redir_week = date('Y-\WW');
             }
-            redirect('admin/weeklyPlanner?week=' . $redir_week);
+            $redirectBranch = max(0, (int)($_POST['branch_id'] ?? 0));
+            redirect('admin/weeklyPlanner?week=' . $redir_week . ($redirectBranch > 0 ? '&branch_id=' . $redirectBranch : ''));
         }
 
         if (!isset($_SESSION['user_company_id'])) {
@@ -1980,19 +2081,36 @@ class AdminController {
         $weekStartDate = $week_dates[0]['full_date'];
         $weekEndDate = end($week_dates)['full_date'];
         
-        $users = $this->userModel->getUsersByCompany($_SESSION['user_company_id']);
+        $companyId = (int)$_SESSION['user_company_id'];
+        $branches = $this->companyModel->getBranches($companyId, false);
+        $branchScopeReady = !empty($branches)
+            && $this->userModel->isBranchAssignmentReady()
+            && $this->workScheduleModel->isBranchScheduleReady();
+        $branchId = (int)($_GET['branch_id'] ?? 0);
+        $selectedBranch = null;
+        if ($branchScopeReady) {
+            $selectedBranch = $this->companyModel->getBranchByIdForCompany($branchId, $companyId, true);
+            if (!$selectedBranch) {
+                $selectedBranch = $branches[0];
+                $branchId = (int)$selectedBranch->id;
+            }
+        } else {
+            $branchId = 0;
+        }
+
+        $users = $this->userModel->getUsersByCompany($companyId, $branchId);
         $shifts = $this->shiftModel->getShiftsWithRangesByCompany($_SESSION['user_company_id']);
-        $holidaysData = $this->holidayModel->getHolidaysForPeriod($_SESSION['user_company_id'], $weekStartDate, $weekEndDate);
-        $requestsData = $this->requestModel->getApprovedRequestsForPeriod($weekStartDate, $weekEndDate, $_SESSION['user_company_id']);
+        $holidaysData = $this->holidayModel->getHolidaysForPeriod($companyId, $weekStartDate, $weekEndDate, $branchId);
+        $requestsData = $this->requestModel->getApprovedRequestsForPeriod($weekStartDate, $weekEndDate, $companyId, $branchId);
         
         $month1_start = date('Y-m-01', strtotime($weekStartDate));
         $month1_end = date('Y-m-t', strtotime($weekStartDate));
-        $allEntries = $this->workScheduleModel->getScheduleEntriesForPeriod($_SESSION['user_company_id'], $month1_start, $month1_end);
+        $allEntries = $this->workScheduleModel->getScheduleEntriesForPeriod($companyId, $month1_start, $month1_end, $branchId);
 
         $month2_start = date('Y-m-01', strtotime($weekEndDate));
         if ($month1_start != $month2_start) {
             $month2_end = date('Y-m-t', strtotime($weekEndDate));
-            $month2_entries = $this->workScheduleModel->getScheduleEntriesForPeriod($_SESSION['user_company_id'], $month2_start, $month2_end);
+            $month2_entries = $this->workScheduleModel->getScheduleEntriesForPeriod($companyId, $month2_start, $month2_end, $branchId);
             $allEntries = array_merge($allEntries, $month2_entries);
         }
 
@@ -2051,7 +2169,6 @@ class AdminController {
             }
         }
 
-        $companyId = (int)$_SESSION['user_company_id'];
         $overtimePlanner = function_exists('overtime_staff_can_view') && overtime_staff_can_view($companyId);
 
         $data = array(
@@ -2063,9 +2180,13 @@ class AdminController {
             'prev_week_string' => date('Y-\WW', strtotime($current_week_string . ' -1 week')),
             'next_week_string' => date('Y-\WW', strtotime($current_week_string . ' +1 week')),
             'overtime_planner_enabled' => $overtimePlanner,
+            'branches' => $branches,
+            'branch_scope_ready' => $branchScopeReady,
+            'selected_branch_id' => $branchId,
+            'selected_branch' => $selectedBranch,
         );
         $templates = $this->templateModel->getTemplatesByCompany($_SESSION['user_company_id']);
-        $data['templates'] = $templates; 
+        $data['templates'] = $templates;
         $this->view('admin/weekly_planner', $data);
     }
 
@@ -2080,6 +2201,7 @@ class AdminController {
 
         $templateId  = filter_input(INPUT_POST, 'template_id',  FILTER_VALIDATE_INT);
         $targetWeek  = isset($_POST['target_week']) ? trim($_POST['target_week']) : '';
+        $branchId = max(0, (int)($_POST['branch_id'] ?? 0));
 
         // Fix 7: validar formato de la semana
         if(!$templateId || !preg_match('/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/', $targetWeek)){
@@ -2093,12 +2215,19 @@ class AdminController {
         $weekDate->setISODate((int)substr($targetWeek, 0, 4), (int)substr($targetWeek, 6, 2));
         $weekStartDate = $weekDate->format('Y-m-d');
 
-        if($this->templateModel->applyTemplateToWeek($templateId, $weekStartDate, $_SESSION['user_company_id'])){
+        if ($this->userModel->isBranchAssignmentReady()
+            && !empty($this->companyModel->getBranches((int)$_SESSION['user_company_id'], false))
+            && !$this->companyModel->getBranchByIdForCompany($branchId, (int)$_SESSION['user_company_id'], true)) {
+            $_SESSION['flash_error'] = 'Seleccioná una sucursal válida para aplicar la plantilla.';
+            redirect('admin/weeklyPlanner?week=' . $targetWeek);
+        }
+
+        if($this->templateModel->applyTemplateToWeek($templateId, $weekStartDate, $_SESSION['user_company_id'], $branchId)){
             $_SESSION['flash_success'] = 'Plantilla aplicada con éxito.';
         } else {
             $_SESSION['flash_error'] = 'Error al aplicar la plantilla.';
         }
-        redirect('admin/weeklyPlanner?week=' . $targetWeek);
+        redirect('admin/weeklyPlanner?week=' . $targetWeek . ($branchId > 0 ? '&branch_id=' . $branchId : ''));
     }
 
     /**
@@ -2129,21 +2258,58 @@ class AdminController {
 
         $targetUser = requireSupervisorUserAccess($userId, 'admin/weeklyPlanner');
 
+        $branchId = max(0, (int)($_POST['branch_id'] ?? 0));
         $refWeekStart = date('Y-m-d', strtotime($targetWeek . '1'));
-        $payload = $this->workScheduleModel->buildWeekPatternApplyPayload($userId, $refWeekStart, $from, $to, $overwrite);
+        $payload = $this->workScheduleModel->buildWeekPatternApplyPayload($userId, $refWeekStart, $from, $to, $overwrite, $branchId);
         if (!$payload['ok']) {
             $_SESSION['flash_error'] = $payload['message'];
             redirect('admin/weeklyPlanner?week=' . urlencode($returnWeek));
         }
 
-        $result = $this->savePlannerSchedulesWithVacationLedger($payload['schedules']);
+        if ($this->userModel->isBranchAssignmentReady()
+            && !$this->userModel->isUserAssignedToBranch((int)$targetUser->id, $branchId)) {
+            $_SESSION['flash_error'] = 'El empleado no pertenece a la sucursal seleccionada.';
+            redirect('admin/weeklyPlanner?week=' . urlencode($returnWeek) . ($branchId > 0 ? '&branch_id=' . $branchId : ''));
+        }
+        $result = $this->savePlannerSchedulesWithVacationLedger($payload['schedules'], $branchId);
         if ($result['ok']) {
             $_SESSION['flash_success'] = 'Horario repetido en ' . (int)$payload['days_updated'] . ' día(s) para '
                 . $targetUser->full_name . '.';
         } else {
             $_SESSION['flash_error'] = $result['message'];
         }
-        redirect('admin/weeklyPlanner?week=' . urlencode($returnWeek));
+        redirect('admin/weeklyPlanner?week=' . urlencode($returnWeek) . ($branchId > 0 ? '&branch_id=' . $branchId : ''));
+    }
+
+    /** Aplica una misma jornada base todos los lunes a viernes. */
+    public function applyFixedWeekdaySchedule() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') redirect('admin/weeklyPlanner');
+        csrf_verify();
+        requireAdminCompany('admin/weeklyPlanner');
+        $userId = (int)($_POST['user_id'] ?? 0);
+        $sourceDate = trim($_POST['source_date'] ?? '');
+        $from = trim($_POST['from_date'] ?? '');
+        $to = trim($_POST['to_date'] ?? '');
+        $branchId = max(0, (int)($_POST['branch_id'] ?? 0));
+        $returnWeek = trim($_POST['return_week'] ?? date('Y-\WW'));
+        $targetUser = requireSupervisorUserAccess($userId, 'admin/weeklyPlanner');
+        if ($this->userModel->isBranchAssignmentReady()
+            && !$this->userModel->isUserAssignedToBranch((int)$targetUser->id, $branchId)) {
+            $_SESSION['flash_error'] = 'El empleado no pertenece a la sucursal seleccionada.';
+            redirect('admin/weeklyPlanner?week=' . urlencode($returnWeek) . '&branch_id=' . $branchId);
+        }
+        $payload = $this->workScheduleModel->buildFixedWeekdayApplyPayload(
+            $userId, $sourceDate, $from, $to, !empty($_POST['overwrite']), $branchId
+        );
+        if (!$payload['ok']) {
+            $_SESSION['flash_error'] = $payload['message'];
+        } else {
+            $result = $this->savePlannerSchedulesWithVacationLedger($payload['schedules'], $branchId);
+            $_SESSION[$result['ok'] ? 'flash_success' : 'flash_error'] = $result['ok']
+                ? 'Jornada fija aplicada de lunes a viernes en ' . (int)$payload['days_updated'] . ' día(s).'
+                : $result['message'];
+        }
+        redirect('admin/weeklyPlanner?week=' . urlencode($returnWeek) . ($branchId > 0 ? '&branch_id=' . $branchId : ''));
     }
 
     public function shiftManager(){
@@ -2652,6 +2818,8 @@ class AdminController {
         $overtimeTab = function_exists('overtime_staff_can_view')
             && overtime_staff_can_view((int)$user->company_id, $user);
 
+        $employeeRecord = $this->employeeRecordModel->getFormData($id, (int)$user->company_id);
+
         $pendingOvertimeCount = 0;
         if ($overtimeTab) {
             foreach ($overtimeEntries as $oe) {
@@ -2684,6 +2852,7 @@ class AdminController {
             'roadmap_stats' => $roadmapStats,
             'ecofarma_commissions_url' => $ecofarmaCommissionsUrl,
             'plex_operator_ready' => $this->userModel->isPlexOperatorReady(),
+            'employee_record' => $employeeRecord,
         ];
 
         $this->view('admin/employee_profile', $data);
@@ -2766,6 +2935,14 @@ class AdminController {
             exit();
         }
 
+        $branchId = max(0, (int)($_POST['branch_id'] ?? 0));
+        if ($this->userModel->isBranchAssignmentReady()
+            && ($branchId <= 0 || !$this->userModel->isUserAssignedToBranch((int)$targetUser->id, $branchId))) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'El empleado no pertenece a la sucursal seleccionada.']);
+            exit();
+        }
+
         $entries = array();
         $companyId = (int)($_SESSION['user_company_id'] ?? 0);
         $validTypes = function_exists('planner_valid_schedule_types')
@@ -2793,11 +2970,11 @@ class AdminController {
             }
         }
 
-        $oldEntries = $this->workScheduleModel->getSchedulesForUserOnDate($userId, $date);
+        $oldEntries = $this->workScheduleModel->getPlannerEntriesForUserOnDate($userId, $date, $branchId);
         if (!$allowNewOvertime && function_exists('planner_preserve_locked_overtime_entries')) {
             $entries = planner_preserve_locked_overtime_entries($entries, $oldEntries);
         }
-        if ($this->workScheduleModel->saveDaySchedule($userId, $date, $entries)) {
+        if ($this->workScheduleModel->saveDaySchedule($userId, $date, $entries, $branchId)) {
             if (vacation_module_ready()) {
                 $ledger = new VacationLedgerService();
                 $vr = $ledger->processPlannerDayChange($userId, $date, $oldEntries, $entries, (int)$_SESSION['user_id']);
@@ -2817,7 +2994,7 @@ class AdminController {
      * Guarda planificación semanal y aplica ledger de vacaciones por día.
      * @return array{ok:bool,message:string}
      */
-    private function savePlannerSchedulesWithVacationLedger(array $schedules) {
+    private function savePlannerSchedulesWithVacationLedger(array $schedules, $branchId = 0) {
         $ledger = vacation_module_ready() ? new VacationLedgerService() : null;
         $adminId = (int)($_SESSION['user_id'] ?? 0);
         $companyId = (int)($_SESSION['user_company_id'] ?? 0);
@@ -2826,9 +3003,20 @@ class AdminController {
             : (vacation_module_ready() ? vacation_planner_valid_types() : ['shift', 'custom', 'overtime']);
         $allowNewOvertime = in_array('overtime', $validTypes, true);
 
+        if ($this->userModel->isBranchAssignmentReady()) {
+            $branches = $this->companyModel->getBranches($companyId, false);
+            if (!empty($branches) && !$this->companyModel->getBranchByIdForCompany((int)$branchId, $companyId, true)) {
+                return ['ok' => false, 'message' => 'Seleccioná una sucursal válida para guardar la planificación.'];
+            }
+        }
+
         foreach ($schedules as $userId => $days) {
             $targetUser = $this->userModel->getUserById((int)$userId);
             if (!$targetUser || $targetUser->company_id != $_SESSION['user_company_id']) {
+                continue;
+            }
+            if ($this->userModel->isBranchAssignmentReady()
+                && ((int)$branchId <= 0 || !$this->userModel->isUserAssignedToBranch((int)$targetUser->id, (int)$branchId))) {
                 continue;
             }
             foreach ($days as $date => $rawEntries) {
@@ -2852,11 +3040,11 @@ class AdminController {
                         ];
                     }
                 }
-                $oldEntries = $this->workScheduleModel->getSchedulesForUserOnDate((int)$userId, $date);
+                $oldEntries = $this->workScheduleModel->getPlannerEntriesForUserOnDate((int)$userId, $date, $branchId);
                 if (!$allowNewOvertime && function_exists('planner_preserve_locked_overtime_entries')) {
                     $entries = planner_preserve_locked_overtime_entries($entries, $oldEntries);
                 }
-                if (!$this->workScheduleModel->saveDaySchedule((int)$userId, $date, $entries)) {
+                if (!$this->workScheduleModel->saveDaySchedule((int)$userId, $date, $entries, $branchId)) {
                     return ['ok' => false, 'message' => 'Error al guardar el día ' . $date . '.'];
                 }
                 if ($ledger) {
@@ -2889,6 +3077,39 @@ class AdminController {
             'source' => $source,
             'user_id' => (int)$userId,
         ];
+    }
+
+    /** Valida que la sede sea operativa y pertenezca a la empresa elegida. */
+    private function validateUserBranch(array &$data) {
+        if (!$this->userModel->isBranchAssignmentReady()) {
+            return;
+        }
+        $companyId = (int)($data['company_id'] ?? 0);
+        $branchIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['branch_ids'] ?? [])))));
+        $branchId = (int)($data['branch_id'] ?? 0);
+        $role = (string)($data['role'] ?? 'empleado');
+        $branches = $companyId > 0 ? $this->companyModel->getBranches($companyId, false) : [];
+
+        if ($role === 'empleado' && !empty($branches) && empty($branchIds)) {
+            $data['errors']['branch_id'] = 'Seleccioná al menos una sucursal donde trabaja el empleado.';
+            return;
+        }
+        foreach ($branchIds as $candidateBranchId) {
+            if (!$this->companyModel->getBranchByIdForCompany($candidateBranchId, $companyId, true)) {
+                $data['errors']['branch_id'] = 'Una sucursal seleccionada no pertenece a la empresa o está inactiva.';
+                return;
+            }
+        }
+        if (!empty($branchIds) && !in_array($branchId, $branchIds, true)) {
+            $data['errors']['branch_id'] = 'Elegí una de las sucursales seleccionadas como principal.';
+            return;
+        }
+        $data['branch_ids'] = $branchIds;
+        $data['branch_id'] = !empty($branchIds) ? $branchId : 0;
+    }
+
+    private function employeeRecordViewData($userId, $companyId) {
+        return ['employee_record' => $this->employeeRecordModel->getFormData((int)$userId, (int)$companyId)];
     }
 
     private function validateUserArea(array &$data) {

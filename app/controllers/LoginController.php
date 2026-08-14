@@ -109,6 +109,10 @@ class LoginController {
      * Destruye la sesión del usuario para cerrar la sesión.
      */
     public function logout(){
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect(isLoggedIn() ? (isStaffAdmin() ? 'admin/dashboard' : 'employee/index') : 'login');
+        }
+        csrf_verify();
         unset($_SESSION['user_id']);
         unset($_SESSION['user_username']);
         unset($_SESSION['user_full_name']); // Limpia el nombre completo de la sesión

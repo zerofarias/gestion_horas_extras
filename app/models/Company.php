@@ -117,6 +117,98 @@ class Company {
         return $this->db->execute([(int)$companyId, $locality, $province]);
     }
 
+    /** Sucursales operativas de una empresa, si el módulo está instalado. */
+    public function branchesReady() {
+        static $ready = null;
+        if ($ready !== null) {
+            return $ready;
+        }
+        try {
+            $this->db->query("SHOW TABLES LIKE 'company_branches'");
+            $ready = (bool)$this->db->single();
+        } catch (Throwable $e) {
+            $ready = false;
+        }
+        return $ready;
+    }
+
+    public function getBranches($companyId, $includeInactive = true) {
+        if (!$this->branchesReady()) {
+            return [];
+        }
+        $sql = 'SELECT * FROM company_branches WHERE company_id = ?';
+        if (!$includeInactive) {
+            $sql .= ' AND is_active = 1';
+        }
+        $sql .= ' ORDER BY is_active DESC, locality ASC, name ASC';
+        $this->db->query($sql);
+        return $this->db->resultSet([(int)$companyId]);
+    }
+
+    /** Obtiene una sucursal de la empresa indicada; evita aceptar IDs de otra empresa. */
+    public function getBranchByIdForCompany($branchId, $companyId, $activeOnly = false) {
+        if (!$this->branchesReady() || (int)$branchId <= 0 || (int)$companyId <= 0) {
+            return null;
+        }
+        $sql = 'SELECT * FROM company_branches WHERE id = ? AND company_id = ?';
+        if ($activeOnly) {
+            $sql .= ' AND is_active = 1';
+        }
+        $this->db->query($sql);
+        return $this->db->single([(int)$branchId, (int)$companyId]);
+    }
+
+    /**
+     * Reemplaza el catálogo de sucursales preservando sus IDs. Las filas que
+     * ya no llegan desde el formulario se desactivan, no se eliminan.
+     */
+    public function saveBranches($companyId, array $branches) {
+        if (!$this->branchesReady()) {
+            return false;
+        }
+
+        $companyId = (int)$companyId;
+        $keptIds = [];
+        foreach ($branches as $branch) {
+            $id = (int)($branch['id'] ?? 0);
+            $name = trim((string)($branch['name'] ?? ''));
+            $locality = trim((string)($branch['locality'] ?? ''));
+            $province = trim((string)($branch['province'] ?? ''));
+            if ($name === '' && $locality === '' && $province === '') {
+                continue;
+            }
+            if ($name === '' || $locality === '' || $province === '') {
+                return false;
+            }
+            $active = !empty($branch['is_active']) ? 1 : 0;
+
+            if ($id > 0) {
+                $this->db->query('UPDATE company_branches SET name = ?, locality = ?, province = ?, is_active = ? WHERE id = ? AND company_id = ?');
+                if (!$this->db->execute([$name, $locality, $province, $active, $id, $companyId])) {
+                    return false;
+                }
+                $keptIds[] = $id;
+            } else {
+                $this->db->query('INSERT INTO company_branches (company_id, name, locality, province, is_active) VALUES (?, ?, ?, ?, ?)');
+                if (!$this->db->execute([$companyId, $name, $locality, $province, $active])) {
+                    return false;
+                }
+                $keptIds[] = (int)$this->db->lastInsertId();
+            }
+        }
+
+        $this->db->query('SELECT id FROM company_branches WHERE company_id = ?');
+        foreach ($this->db->resultSet([$companyId]) as $current) {
+            if (!in_array((int)$current->id, $keptIds, true)) {
+                $this->db->query('UPDATE company_branches SET is_active = 0 WHERE id = ? AND company_id = ?');
+                if (!$this->db->execute([(int)$current->id, $companyId])) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     public function hasShowOvertimeColumn() {
         static $ready = null;
         if ($ready !== null) {

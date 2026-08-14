@@ -29,7 +29,8 @@ class VacationLedgerService {
             $request->end_date ?: $request->start_date,
             $rule->day_count_mode,
             (int)$user->company_id,
-            $this->db
+            $this->db,
+            (int)($user->branch_id ?? 0)
         );
         $days = count($dates);
         $warnings = [];
@@ -45,7 +46,7 @@ class VacationLedgerService {
             $warnings[] = 'No cumple la anticipación de ' . $noticeDays . ' días del convenio.';
         }
         if (($agreement->start_rule ?? '') === 'monday_or_next_business'
-            && !$this->isMondayOrNextBusinessDay($request->start_date, (int)$user->company_id)) {
+            && !$this->isMondayOrNextBusinessDay($request->start_date, (int)$user->company_id, (int)($user->branch_id ?? 0))) {
             $warnings[] = 'El convenio exige comenzar un lunes o el siguiente hábil cuando sea feriado.';
         }
 
@@ -312,14 +313,14 @@ class VacationLedgerService {
         }
     }
 
-    private function isMondayOrNextBusinessDay($date, $companyId) {
+    private function isMondayOrNextBusinessDay($date, $companyId, $branchId = 0) {
         $dt = new DateTime($date);
         $monday = clone $dt;
         $monday->modify('monday this week');
         $holiday = new Holiday($this->db);
         $candidate = $monday;
         while ((int)$candidate->format('N') >= 6
-            || $holiday->isHolidayForCompany($companyId, $candidate->format('Y-m-d'))) {
+            || $holiday->isHolidayForCompany($companyId, $candidate->format('Y-m-d'), $branchId)) {
             $candidate->modify('+1 day');
         }
         return $candidate->format('Y-m-d') === $dt->format('Y-m-d');

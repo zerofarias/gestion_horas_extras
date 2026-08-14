@@ -84,6 +84,8 @@
                     </div>
                     <?php endif; ?>
 
+                    <?php require APPROOT . '/views/admin/partials/user_branch_field.php'; ?>
+
                     <div class="mb-3">
                         <label for="employee_group" class="form-label">Grupo organizacional <span class="text-danger">*</span></label>
                         <?php $selectedGroup = User::normalizeOrganizationGroup($data['user']->employee_group ?? 'paviotti'); ?>
@@ -145,6 +147,8 @@
                     }
                     require APPROOT . '/views/admin/partials/user_employment_fields.php';
                     ?>
+
+                    <?php require APPROOT . '/views/admin/partials/user_complete_record_fields.php'; ?>
 
                     <hr class="my-4">
                     <h6 class="mb-1 text-muted">IDs de Empleado en Relojes</h6>

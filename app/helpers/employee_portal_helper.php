@@ -137,6 +137,20 @@ function employee_portal_normalize_path($url) {
     return $url;
 }
 
+/** Devuelve únicamente URLs web o rutas internas aptas para un href. */
+function employee_portal_safe_link_url($url, $fallback = '#') {
+    $url = trim((string)$url);
+    if ($url === '') return $fallback;
+    if ($url[0] === '/' && strpos($url, '//') !== 0) return $url;
+    $root = rtrim(defined('URLROOT') ? URLROOT : '', '/');
+    if ($root !== '' && ($url === $root || strpos($url, $root . '/') === 0)) return $url;
+    $parts = parse_url($url);
+    if (is_array($parts) && isset($parts['scheme']) && in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+        return $url;
+    }
+    return $fallback;
+}
+
 /** Rutas del portal que exigen un módulo visible. */
 function employee_portal_path_feature_map() {
     return [

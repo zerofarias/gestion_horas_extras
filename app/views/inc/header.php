@@ -3,9 +3,21 @@
 
 if (!function_exists('navIsActive')) {
     function navIsActive(...$paths) {
-        $current = $_SERVER['REQUEST_URI'];
+        $current = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
         foreach ($paths as $path) {
-            if ($path !== '' && strpos($current, $path) !== false) return 'active';
+            if ($path === '') continue;
+            $normalized = '/' . trim($path, '/');
+            if ($current === $normalized || strpos($current, $normalized . '/') === 0) return 'active';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('navIsExactActive')) {
+    function navIsExactActive(...$paths) {
+        $current = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+        foreach ($paths as $path) {
+            if ($current === '/' . trim($path, '/')) return 'active';
         }
         return '';
     }
@@ -101,19 +113,33 @@ $_brandName = function_exists('company_brand_display_name') ? company_brand_disp
 $_brandSubtitle = function_exists('company_brand_subtitle') ? company_brand_subtitle() : 'Gestión de RRHH';
 $_bodyBrandClass = function_exists('company_brand_body_class') ? company_brand_body_class() : '';
 $_usesCpNav = function_exists('current_user_uses_casapav_tasks') && current_user_uses_casapav_tasks();
+$_pageTitles = [
+    '/admin/dashboard' => 'Dashboard', '/admin/users' => 'Usuarios',
+    '/admin/calendar' => 'Calendario', '/admin/weeklyPlanner' => 'Planificador semanal',
+    '/admin/attendance' => 'Asistencia', '/admin/requests' => 'Solicitudes',
+    '/employee/index' => 'Inicio', '/employee/profile' => 'Mi perfil',
+    '/employee/misHorarios' => 'Mis horarios', '/employee/dashboard' => 'Horas extras',
+];
+$_currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+$_pageTitle = SITENAME;
+foreach ($_pageTitles as $_titlePath => $_titleLabel) {
+    if ($_currentPath === $_titlePath || strpos($_currentPath, $_titlePath . '/') === 0) {
+        $_pageTitle = $_titleLabel . ' · ' . $_brandName;
+        break;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo SITENAME; ?></title>
+    <title><?php echo htmlspecialchars($_pageTitle, ENT_QUOTES, 'UTF-8'); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css' rel='stylesheet' />
     <link rel="stylesheet" href="<?php echo URLROOT; ?>/css/style.css">
     <?php if (isLoggedIn() && function_exists('notifications_is_ready') && notifications_is_ready()): ?>
     <link rel="stylesheet" href="<?php echo URLROOT; ?>/css/notifications.css">
@@ -143,7 +169,7 @@ echo isLoggedIn()
                 <span class="brand-subtitle"><?php echo htmlspecialchars($_brandSubtitle); ?></span>
             </div>
         </a>
-        <button class="sidebar-close-btn d-lg-none" id="sidebarCloseBtn" aria-label="Cerrar menú">
+        <button class="sidebar-close-btn d-lg-none" id="sidebarCloseBtn" aria-label="Cerrar menú" aria-controls="appSidebar">
             <i class="fas fa-times"></i>
         </button>
     </div>
@@ -232,9 +258,9 @@ echo isLoggedIn()
             </a>
 
             <?php if (function_exists('learning_is_ready') && learning_is_ready()): ?>
-            <div>Capacitación</div>
+            <div class="sidebar-section-title">Capacitación</div>
             <a href="<?php echo URLROOT; ?>/trainingAdmin/courses"
-               class="sidebar-nav-link <?php echo navIsActive('/trainingAdmin'); ?>">
+               class="sidebar-nav-link <?php echo navIsExactActive('/trainingAdmin', '/trainingAdmin/courses'); ?>">
                 <i class="fas fa-fw fa-graduation-cap"></i><span>Cursos</span>
             </a>
             <a href="<?php echo URLROOT; ?>/trainingAdmin/areas"
@@ -339,6 +365,10 @@ echo isLoggedIn()
             <a href="<?php echo URLROOT; ?>/admin/mapeoApi"
                class="sidebar-nav-link <?php echo navIsActive('/admin/mapeoApi', '/admin/saveMappingFromApi', '/admin/deleteMappingFromApi'); ?>">
                 <i class="fas fa-fw fa-link"></i><span>Mapeo de Relojes</span>
+            </a>
+            <a href="<?php echo URLROOT; ?>/admin/clockDevices"
+               class="sidebar-nav-link <?php echo navIsActive('/admin/clockDevices', '/admin/saveClockDevice'); ?>">
+                <i class="fas fa-fw fa-stopwatch"></i><span>Relojes y sucursales</span>
             </a>
             <a href="<?php echo URLROOT; ?>/admin/mapeoIncompleto"
                class="sidebar-nav-link <?php echo navIsActive('/admin/mapeoIncompleto'); ?>">
@@ -463,9 +493,12 @@ echo isLoggedIn()
     </div>
 
     <div class="sidebar-footer">
-        <a href="<?php echo URLROOT; ?>/login/logout" class="sidebar-logout-btn">
-            <i class="fas fa-fw fa-sign-out-alt"></i><span>Cerrar Sesión</span>
-        </a>
+        <form method="post" action="<?php echo URLROOT; ?>/login/logout" class="m-0">
+            <?php echo csrf_field(); ?>
+            <button type="submit" class="sidebar-logout-btn w-100 border-0">
+                <i class="fas fa-fw fa-sign-out-alt"></i><span>Cerrar sesión</span>
+            </button>
+        </form>
     </div>
 </aside>
 <!-- Overlay oscuro para mobile -->
@@ -480,7 +513,7 @@ echo isLoggedIn()
         <div class="topbar-left">
             <button class="topbar-toggle d-lg-none"
                     id="sidebarMobileToggle"
-                    aria-label="Abrir menú">
+                    aria-label="Abrir menú" aria-controls="appSidebar" aria-expanded="false">
                 <i class="fas fa-bars"></i>
             </button>
             <button class="topbar-toggle d-none d-lg-flex"
@@ -493,11 +526,11 @@ echo isLoggedIn()
                 $_companySwitcher = (new Company())->getAllCompanies();
                 $_activeCompanyId = (int)($_SESSION['user_company_id'] ?? 0);
             ?>
-            <form method="post" action="<?php echo URLROOT; ?>/admin/setCompany" class="topbar-company-form d-none d-md-flex align-items-center me-2">
+            <form method="post" action="<?php echo URLROOT; ?>/admin/setCompany" class="topbar-company-form d-flex align-items-center me-1 me-md-2" title="Empresa activa en todo el panel">
                 <?php echo csrf_field(); ?>
                 <input type="hidden" name="return_url" value="<?php echo htmlspecialchars((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['REQUEST_URI'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
-                <label class="text-muted small me-1 mb-0" for="topbarCompanySelect">Empresa</label>
-                <select name="company_id" id="topbarCompanySelect" class="form-select form-select-sm" style="max-width:200px" onchange="this.form.submit()">
+                <label class="topbar-company-label text-muted small me-1 mb-0" for="topbarCompanySelect">Empresa activa</label>
+                <select name="company_id" id="topbarCompanySelect" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Cambiar empresa activa">
                     <?php if ($_activeCompanyId <= 0): ?>
                     <option value="" selected disabled>Elegir…</option>
                     <?php endif; ?>
@@ -593,13 +626,13 @@ echo isLoggedIn()
                     <span class="topbar-user-role"><i class="fas fa-crown me-1" style="font-size:.6rem;color:var(--clr-warning);"></i><?php echo $_userRole; ?></span>
                 </div>
             </div>
-            <a href="<?php echo URLROOT; ?>/login/logout"
-               class="topbar-logout-btn"
-               title="Cerrar sesión"
-               aria-label="Cerrar sesión">
-                <i class="fas fa-sign-out-alt"></i>
-                <span class="topbar-logout-label d-none d-md-inline">Salir</span>
-            </a>
+            <form method="post" action="<?php echo URLROOT; ?>/login/logout" class="m-0">
+                <?php echo csrf_field(); ?>
+                <button type="submit" class="topbar-logout-btn border-0" title="Cerrar sesión" aria-label="Cerrar sesión">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span class="topbar-logout-label d-none d-md-inline">Salir</span>
+                </button>
+            </form>
         </div>
     </header>
 

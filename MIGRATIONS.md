@@ -2,6 +2,22 @@
 
 Este archivo documenta las migraciones disponibles en el repositorio y, especialmente, la evolución de vacaciones v2. Varias migraciones históricas citadas por el código todavía no están versionadas; por eso no debe asumirse que este repositorio reconstruye una base vacía completa.
 
+## Legajo integral
+
+Archivo: `migration_employee_record_complete.sql`.
+
+Requiere las tablas históricas `users`, `companies`, `areas` y `collective_agreements`.
+Crea catálogos de puestos y cobertura médica, relaciones laborales multiempresa,
+domicilios estructurados y afiliaciones. Conserva los campos principales de `users` por
+compatibilidad y migra cada relación vigente solamente si aún no existe.
+
+Después de aplicarla, verificar alta/edición de usuario, `/admin/employeeCatalogs` y la
+pestaña Legajo de la ficha. No se proporciona rollback destructivo: restaurar el backup si
+la migración falla.
+
+El generador `scripts/build_migration_hosting_full.sh` la incorpora como paso `39`, después
+de vacaciones v2 y de las tablas históricas de convenios requeridas por sus claves foráneas.
+
 ## Vacaciones v2
 
 Archivo: `migration_vacation_management_v2.sql`

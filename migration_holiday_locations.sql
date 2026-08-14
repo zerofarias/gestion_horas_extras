@@ -25,13 +25,16 @@ CREATE TABLE IF NOT EXISTS holiday_rules (
     INDEX idx_holiday_rules_scope (is_active, scope_type, province, locality)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Aniversario de la fundacion oficial de Villa María (Córdoba), 1867.
--- Se aplica cada 27 de septiembre a toda empresa/sucursal ubicada en Villa María, Córdoba.
+-- Anniversary of Villa Maria (Cordoba). Hex literals preserve UTF-8 independently of the SQL console encoding.
 UPDATE holiday_rules
-SET name = 'Aniversario de Villa María', province = 'Córdoba', locality = 'Villa María', is_active = 1
-WHERE month_day = '09-27' AND scope_type = 'locality'
-  AND province IN ('Cordoba', 'Córdoba') AND locality IN ('Villa Maria', 'Villa María');
+SET name = CONVERT(0x416E69766572736172696F2064652056696C6C61204D6172C3AD61 USING utf8mb4),
+    province = CONVERT(0x43C3B372646F6261 USING utf8mb4),
+    locality = CONVERT(0x56696C6C61204D6172C3AD61 USING utf8mb4),
+    is_active = 1
+WHERE month_day = '09-27' AND scope_type = 'locality';
 
 INSERT INTO holiday_rules (name, month_day, scope_type, province, locality, is_active)
-VALUES ('Aniversario de Villa María', '09-27', 'locality', 'Córdoba', 'Villa María', 1)
+VALUES (CONVERT(0x416E69766572736172696F2064652056696C6C61204D6172C3AD61 USING utf8mb4),
+        '09-27', 'locality', CONVERT(0x43C3B372646F6261 USING utf8mb4),
+        CONVERT(0x56696C6C61204D6172C3AD61 USING utf8mb4), 1)
 ON DUPLICATE KEY UPDATE name = VALUES(name), is_active = VALUES(is_active);

@@ -84,6 +84,19 @@
                     </div>
                     <?php endif; ?>
 
+                    <div class="mb-3">
+                        <label for="employee_group" class="form-label">Grupo organizacional <span class="text-danger">*</span></label>
+                        <?php $selectedGroup = User::normalizeOrganizationGroup($data['user']->employee_group ?? 'paviotti'); ?>
+                        <select name="employee_group" id="employee_group" class="form-select" required>
+                            <?php foreach (User::organizationGroupOptions() as $groupKey => $groupLabel): ?>
+                            <option value="<?php echo htmlspecialchars($groupKey); ?>" <?php echo $selectedGroup === $groupKey ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($groupLabel); ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">Sirve para segmentar comunicaciones y no reemplaza la empresa ni el área.</small>
+                    </div>
+
                     <?php require APPROOT . '/views/admin/partials/user_area_field.php'; ?>
 
                     <div class="row">

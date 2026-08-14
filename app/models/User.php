@@ -95,6 +95,18 @@ class User {
         return $opts[$code] ?? ($code ?: '—');
     }
 
+    public static function organizationGroupOptions() {
+        return [
+            'paviotti' => 'Paviotti',
+            'moderna' => 'Moderna',
+        ];
+    }
+
+    public static function normalizeOrganizationGroup($value) {
+        $value = strtolower(trim((string)$value));
+        return array_key_exists($value, self::organizationGroupOptions()) ? $value : 'paviotti';
+    }
+
     /** Campos de perfil desde POST (crear / editar usuario). */
     public static function profileFromPost(array $post) {
         $sex = isset($post['sex']) ? trim((string)$post['sex']) : '';
@@ -142,6 +154,15 @@ class User {
     public function isAreaReady() {
         try {
             $this->db->query("SHOW COLUMNS FROM `users` LIKE 'area_id'");
+            return (bool)$this->db->single();
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
+    public function isOrganizationGroupReady() {
+        try {
+            $this->db->query("SHOW COLUMNS FROM `users` LIKE 'employee_group'");
             return (bool)$this->db->single();
         } catch (Throwable $e) {
             return false;
@@ -264,6 +285,10 @@ class User {
             $cols[] = 'area_id';
             $vals[] = $areaId;
         }
+        if ($this->isOrganizationGroupReady()) {
+            $cols[] = 'employee_group';
+            $vals[] = self::normalizeOrganizationGroup($data['employee_group'] ?? 'paviotti');
+        }
 
         $cols = array_merge($cols, $this->employmentColumnNames());
         $vals = array_merge($vals, $this->employmentValues($data));
@@ -302,6 +327,10 @@ class User {
         if ($areaReady) {
             $sets[] = 'area_id = ?';
             $vals[] = isset($data['area_id']) && (int)$data['area_id'] > 0 ? (int)$data['area_id'] : null;
+        }
+        if ($this->isOrganizationGroupReady()) {
+            $sets[] = 'employee_group = ?';
+            $vals[] = self::normalizeOrganizationGroup($data['employee_group'] ?? 'paviotti');
         }
         if ($profileReady) {
             $sets = array_merge($sets, [
@@ -443,6 +472,7 @@ class User {
     public function getActiveEmployeesForNotifications() {
         $areaJoin = '';
         $areaCol = '';
+        $groupCol = $this->isOrganizationGroupReady() ? ', u.employee_group' : ", 'paviotti' AS employee_group";
         try {
             $this->db->query("SHOW COLUMNS FROM `users` LIKE 'area_id'");
             if ($this->db->single()) {
@@ -453,7 +483,7 @@ class User {
             // sin area_id
         }
         $this->db->query("
-            SELECT u.id, u.full_name, u.company_id, c.name AS company_name{$areaCol}
+            SELECT u.id, u.full_name, u.company_id{$groupCol}, c.name AS company_name{$areaCol}
             FROM users u
             LEFT JOIN companies c ON c.id = u.company_id
             {$areaJoin}
@@ -467,6 +497,7 @@ class User {
     public function getUsersForNotificationPicker() {
         $areaJoin = '';
         $areaCol = '';
+        $groupCol = $this->isOrganizationGroupReady() ? ', u.employee_group' : ", 'paviotti' AS employee_group";
         try {
             $this->db->query("SHOW COLUMNS FROM `users` LIKE 'area_id'");
             if ($this->db->single()) {
@@ -476,7 +507,7 @@ class User {
         } catch (Throwable $e) {
         }
         $this->db->query("
-            SELECT u.id, u.full_name, u.role, u.company_id, c.name AS company_name{$areaCol}
+            SELECT u.id, u.full_name, u.role, u.company_id{$groupCol}, c.name AS company_name{$areaCol}
             FROM users u
             LEFT JOIN companies c ON c.id = u.company_id
             {$areaJoin}

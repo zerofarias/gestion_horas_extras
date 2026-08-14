@@ -83,6 +83,8 @@ $empleados  = count(array_filter($users, fn($u) => $u->role === 'empleado'));
         <button class="admin-filter-chip" data-filter="inactivo">Inactivos</button>
         <button class="admin-filter-chip" data-filter="admin">Admins</button>
         <button class="admin-filter-chip" data-filter="empleado">Empleados</button>
+        <button class="admin-filter-chip" data-filter="group-paviotti">Paviotti</button>
+        <button class="admin-filter-chip" data-filter="group-moderna">Moderna</button>
     </div>
     <input type="text" id="userSearch" class="form-control admin-search" placeholder="Buscar por nombre o usuario...">
 </div>
@@ -101,6 +103,7 @@ $empleados  = count(array_filter($users, fn($u) => $u->role === 'empleado'));
 <div class="user-card-wrap"
      data-status="<?php echo $isActive ? 'activo' : 'inactivo'; ?>"
      data-role="<?php echo $u->role; ?>"
+     data-group="<?php echo htmlspecialchars(User::normalizeOrganizationGroup($u->employee_group ?? 'paviotti')); ?>"
      data-name="<?php echo htmlspecialchars(strtolower($u->full_name . ' ' . $u->username), ENT_QUOTES, 'UTF-8'); ?>">
     <div class="admin-user-card <?php echo $isActive ? '' : 'is-inactive'; ?>">
         <div class="admin-user-top">
@@ -125,6 +128,7 @@ $empleados  = count(array_filter($users, fn($u) => $u->role === 'empleado'));
                     <?php if (!empty($u->company_name)): ?>
                     <span class="admin-soft-badge is-muted" title="Empresa"><?php echo htmlspecialchars($u->company_name); ?></span>
                     <?php endif; ?>
+                    <span class="admin-soft-badge is-blue" title="Grupo organizacional"><?php echo htmlspecialchars(User::organizationGroupOptions()[User::normalizeOrganizationGroup($u->employee_group ?? 'paviotti')]); ?></span>
                     <span class="admin-soft-badge <?php echo $isAdmin ? 'is-blue' : 'is-primary'; ?>"><?php echo $roleLabel; ?></span>
                     <span class="admin-soft-badge <?php echo $isActive ? 'is-success' : 'is-danger'; ?>"><?php echo $isActive ? 'Activo' : 'Inactivo'; ?></span>
                 </div>
@@ -184,7 +188,8 @@ $empleados  = count(array_filter($users, fn($u) => $u->role === 'empleado'));
         cards.forEach(c => {
             const matchFilter = activeFilter === 'all'
                 || c.dataset.status === activeFilter
-                || c.dataset.role   === activeFilter;
+                || c.dataset.role   === activeFilter
+                || (activeFilter.startsWith('group-') && c.dataset.group === activeFilter.replace('group-', ''));
             const matchSearch  = !q || c.dataset.name.includes(q);
             const show = matchFilter && matchSearch;
             c.style.display = show ? '' : 'none';

@@ -1127,6 +1127,7 @@ class AdminController {
                 'confirm_password' => isset($_POST['confirm_password']) ? trim($_POST['confirm_password']) : '',
                 'role' => isset($_POST['role']) ? $_POST['role'] : 'empleado',
                 'company_id' => isset($_POST['company_id']) ? (int)$_POST['company_id'] : 0,
+                'employee_group' => User::normalizeOrganizationGroup($_POST['employee_group'] ?? 'paviotti'),
                 'profile_picture' => 'default.png',
                 'errors' => [],
             ], name_from_post($_POST), User::profileFromPost($_POST), [
@@ -1204,6 +1205,7 @@ class AdminController {
                 'id' => $id,
                 'role' => isset($_POST['role']) ? $_POST['role'] : 'empleado',
                 'company_id' => $companyId,
+                'employee_group' => User::normalizeOrganizationGroup($_POST['employee_group'] ?? 'paviotti'),
                 'hourly_rate' => isset($_POST['hourly_rate']) ? trim($_POST['hourly_rate']) : 0,
                 'weekly_hour_limit' => isset($_POST['weekly_hour_limit']) ? trim($_POST['weekly_hour_limit']) : '',
                 'vacation_days_available' => isset($_POST['vacation_days_available']) ? trim($_POST['vacation_days_available']) : '',
@@ -1282,6 +1284,7 @@ class AdminController {
                 if ($user) {
                     $user->company_id = $data['company_id'];
                     $user->area_id = !empty($data['area_id']) ? (int)$data['area_id'] : null;
+                    $user->employee_group = $data['employee_group'];
                 }
                 $clockMappings = $this->userModel->getClockMappingsForUser($id);
                 $data['user'] = $user;

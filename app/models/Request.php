@@ -6,8 +6,8 @@
 class Request {
     private $db;
 
-    public function __construct(){
-        $this->db = new Database;
+    public function __construct($db = null){
+        $this->db = $db instanceof Database ? $db : new Database;
     }
 
     /**
@@ -108,6 +108,30 @@ class Request {
         ");
         $this->db->bind(':id', $id);
         return $this->db->single();
+    }
+
+    public function getRequestByIdForUpdate($id) {
+        $this->db->query("SELECT r.*, u.company_id, rt.name AS type_name
+            FROM requests r
+            JOIN users u ON u.id = r.user_id
+            JOIN request_types rt ON rt.id = r.request_type_id
+            WHERE r.id = :id FOR UPDATE");
+        $this->db->bind(':id', (int)$id);
+        return $this->db->single();
+    }
+
+    public function saveVacationReview($id, $days, array $snapshot, $exceptionReason = '', $adminId = 0) {
+        $this->db->query('UPDATE requests SET vacation_counted_days = :days,
+            vacation_rule_snapshot = :snapshot, vacation_exception_reason = :reason,
+            vacation_exception_by = :exception_by, vacation_exception_at = :exception_at
+            WHERE id = :id');
+        $this->db->bind(':days', (float)$days);
+        $this->db->bind(':snapshot', json_encode($snapshot, JSON_UNESCAPED_UNICODE));
+        $this->db->bind(':reason', $exceptionReason !== '' ? $exceptionReason : null);
+        $this->db->bind(':exception_by', $exceptionReason !== '' ? (int)$adminId : null);
+        $this->db->bind(':exception_at', $exceptionReason !== '' ? date('Y-m-d H:i:s') : null);
+        $this->db->bind(':id', (int)$id);
+        return $this->db->execute();
     }
 
     public function getRequestByIdForCompany($id, $companyId) {

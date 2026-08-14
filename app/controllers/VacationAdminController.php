@@ -92,8 +92,14 @@ class VacationAdminController {
             'code' => $code,
             'name' => $name,
             'description' => trim($_POST['description'] ?? ''),
-            'period_start_month' => (int)($_POST['period_start_month'] ?? 10),
+            'jurisdiction' => trim($_POST['jurisdiction'] ?? ''),
+            'legal_reference' => trim($_POST['legal_reference'] ?? ''),
+            'period_start_month' => (int)($_POST['period_start_month'] ?? 1),
             'period_start_day' => (int)($_POST['period_start_day'] ?? 1),
+            'notice_days' => (int)($_POST['notice_days'] ?? 30),
+            'start_rule' => trim($_POST['start_rule'] ?? 'lct'),
+            'split_policy' => trim($_POST['split_policy'] ?? 'lct_7'),
+            'minimum_request_days' => (float)($_POST['minimum_request_days'] ?? 7),
             'is_active' => !empty($_POST['is_active']),
         ]);
         if (!$ok) {
@@ -119,9 +125,10 @@ class VacationAdminController {
             'min_months' => (int)($_POST['min_months'] ?? 0),
             'max_months' => $maxMonths === '' ? null : (int)$maxMonths,
             'days_entitled' => (int)($_POST['days_entitled'] ?? 0),
-            'day_count_mode' => $_POST['day_count_mode'] ?? 'weekdays',
+            'day_count_mode' => $_POST['day_count_mode'] ?? 'calendar',
             'allows_split' => true,
             'allows_carryover' => !empty($_POST['allows_carryover']),
+            'min_consecutive_days' => (int)($_POST['min_consecutive_days'] ?? 7),
             'notes' => trim($_POST['notes'] ?? ''),
         ]);
         $_SESSION['flash_success'] = 'Regla agregada.';
@@ -138,7 +145,7 @@ class VacationAdminController {
         $summary = $this->entitlement->getSummaryForUser($userId);
         $agreements = $this->agreementModel->getAll();
         $bounds = $this->entitlement->getPeriodBoundsForDate($userId);
-        $suggestedLabel = $bounds['period_label'] ?? date('Y') . '-' . (date('Y') + 1);
+        $suggestedLabel = $bounds['period_label'] ?? date('Y');
         $this->view('admin/vacation/setup', [
             'user' => $user,
             'summary' => $summary,
@@ -205,6 +212,7 @@ class VacationAdminController {
 
         $adminId = (int)$_SESSION['user_id'];
         $periods = $_POST['periods'] ?? [];
+        $importErrors = [];
         if (is_array($periods)) {
             foreach ($periods as $row) {
                 $label = trim($row['period_label'] ?? '');
@@ -213,16 +221,70 @@ class VacationAdminController {
                 }
                 $entitled = (float)($row['days_entitled'] ?? 0);
                 $taken = (float)($row['days_taken'] ?? 0);
-                $this->entitlement->importPeriodBalance($userId, $label, $entitled, $taken, $adminId, 'Carga inicial RRHH');
+                $importResult = $this->entitlement->importPeriodBalance($userId, $label, $entitled, $taken, $adminId, 'Carga inicial RRHH');
+                if (!$importResult['ok']) $importErrors[] = $label . ': ' . $importResult['message'];
             }
         }
 
         if (!empty($_POST['liquidate_current'])) {
             $result = $this->entitlement->liquidatePeriod($userId, null, $adminId);
-            $_SESSION[$result['ok'] ? 'flash_success' : 'flash_error'] = $result['message'];
+            if ($importErrors) {
+                $_SESSION['flash_error'] = implode(' ', $importErrors) . ' ' . $result['message'];
+            } else {
+                $_SESSION[$result['ok'] ? 'flash_success' : 'flash_error'] = $result['message'];
+            }
+        } elseif ($importErrors) {
+            $_SESSION['flash_error'] = implode(' ', $importErrors);
         } else {
             $_SESSION['flash_success'] = 'Datos de vacaciones guardados.';
         }
+        redirect('vacationAdmin/vacationSetup/' . $userId);
+    }
+
+    public function addHistoricalBalance($userId) {
+        $userId = (int)$userId;
+        adminResolveUser($userId);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('vacationAdmin/vacationSetup/' . $userId);
+        }
+        csrf_verify();
+        $result = $this->entitlement->addHistoricalBalance(
+            $userId, (int)($_POST['year'] ?? 0), (float)($_POST['days'] ?? 0),
+            (int)$_SESSION['user_id'], trim(strip_tags($_POST['reason'] ?? ''))
+        );
+        $_SESSION[$result['ok'] ? 'flash_success' : 'flash_error'] = $result['message'];
+        redirect('vacationAdmin/vacationSetup/' . $userId);
+    }
+
+    public function addConventionalCredit($userId) {
+        $userId = (int)$userId;
+        adminResolveUser($userId);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('vacationAdmin/vacationSetup/' . $userId);
+        }
+        csrf_verify();
+        $result = $this->entitlement->addConventionalCredit(
+            $userId, (int)($_POST['year'] ?? 0), (float)($_POST['days'] ?? 0),
+            trim($_POST['expires_at'] ?? ''), (int)$_SESSION['user_id'],
+            trim(strip_tags($_POST['reason'] ?? ''))
+        );
+        $_SESSION[$result['ok'] ? 'flash_success' : 'flash_error'] = $result['message'];
+        redirect('vacationAdmin/vacationSetup/' . $userId);
+    }
+
+    public function convertBalance($userId) {
+        $userId = (int)$userId;
+        adminResolveUser($userId);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('vacationAdmin/vacationSetup/' . $userId);
+        }
+        csrf_verify();
+        $result = $this->entitlement->convertPeriodBalance(
+            $userId, (int)($_POST['period_id'] ?? 0), trim($_POST['target_mode'] ?? ''),
+            (float)($_POST['target_pending'] ?? -1), (int)$_SESSION['user_id'],
+            trim(strip_tags($_POST['reason'] ?? ''))
+        );
+        $_SESSION[$result['ok'] ? 'flash_success' : 'flash_error'] = $result['message'];
         redirect('vacationAdmin/vacationSetup/' . $userId);
     }
 
@@ -240,7 +302,7 @@ class VacationAdminController {
             $first = $employees[0];
             $bounds = $this->entitlement->getPeriodBoundsForDate((int)$first->id);
         }
-        $suggestedPeriod = $bounds['period_label'] ?? (date('Y') . '-' . (date('Y') + 1));
+        $suggestedPeriod = $bounds['period_label'] ?? date('Y');
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             csrf_verify();
@@ -285,48 +347,102 @@ class VacationAdminController {
     }
 
     public function reports() {
-        $companyId = requireAdminCompany('admin/dashboard');
-        $alerts = $this->entitlement->getCompanyVacationAlerts($companyId);
-        $employees = $this->userModel->getActiveEmployeesForVacationLiquidation($companyId);
-        $balances = [];
-        foreach ($employees as $emp) {
-            $balances[] = (object)[
-                'user' => $emp,
-                'pending' => $this->balanceModel->getTotalPending((int)$emp->id),
-                'agreement' => $this->entitlement->getEffectiveAgreement($emp),
-            ];
-        }
+        $filters = $this->vacationReportFilters();
+        $report = $this->balanceModel->getPendingReport($filters);
+        $statsFilters = $filters;
+        $statsFilters['export'] = true;
+        $statsFilters['balance_status'] = 'both';
+        $stats = $this->buildVacationStats($this->balanceModel->getPendingReport($statsFilters)['rows']);
         $this->view('admin/vacation/reports', [
-            'company_id' => $companyId,
-            'alerts' => $alerts,
-            'balances' => $balances,
-            'october_reminder' => ((int)date('n') === 10),
+            'filters' => $filters,
+            'report' => $report,
+            'stats' => $stats,
+            'companies' => $this->companyModel->getAllCompanies(),
+            'agreements' => $this->agreementModel->getAll(),
+            'areas' => (new Area())->getAll(),
         ]);
     }
 
     public function exportVacationBalancesCsv() {
-        $companyId = requireAdminCompany('vacationAdmin/reports');
         if (!$this->entitlement->isReady()) {
             $_SESSION['flash_error'] = 'Módulo de vacaciones no disponible.';
             redirect('vacationAdmin/reports');
         }
-        $employees = $this->userModel->getActiveEmployeesForVacationLiquidation($companyId);
+        $filters = $this->vacationReportFilters();
+        $filters['export'] = true;
+        $report = $this->balanceModel->getPendingReport($filters);
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="vacaciones_saldos_' . date('Y-m-d') . '.csv"');
         $out = fopen('php://output', 'w');
         fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
-        fputcsv($out, ['Empleado', 'Ingreso', 'Convenio', 'Días pendientes'], ';');
-        foreach ($employees as $emp) {
-            $ag = $this->entitlement->getEffectiveAgreement($emp);
+        fputcsv($out, ['Empleado', 'Documento', 'Empresa', 'Area', 'Convenio', 'Pendiente total',
+            'Historico', 'Periodo actual', 'Periodo mas antiguo', 'Proximo vencimiento'], ';');
+        foreach ($report['rows'] as $row) {
             fputcsv($out, [
-                $emp->full_name,
-                $emp->hire_date ?? '',
-                $ag ? $ag->name : '',
-                number_format($this->balanceModel->getTotalPending((int)$emp->id), 2, '.', ''),
+                $row->full_name,
+                $row->document_number ?? '',
+                $row->company_name ?? '',
+                $row->area_name ?? '',
+                $row->agreement_name ?? '',
+                number_format($row->total_pending, 1, '.', ''),
+                number_format($row->historical_pending, 1, '.', ''),
+                number_format($row->current_pending, 1, '.', ''),
+                $row->oldest_period ?? '',
+                $row->next_expiry ?? '',
             ], ';');
         }
         fclose($out);
         exit();
+    }
+
+    private function vacationReportFilters() {
+        $types = ['annual', 'historical', 'conventional_credit'];
+        $active = in_array($_GET['active'] ?? 'active', ['active', 'inactive', 'all'], true)
+            ? $_GET['active'] : 'active';
+        $balanceStatus = in_array($_GET['balance_status'] ?? 'with', ['with', 'without', 'both'], true)
+            ? $_GET['balance_status'] : 'with';
+        return [
+            'company_id' => (int)($_GET['company_id'] ?? 0),
+            'agreement_id' => (int)($_GET['agreement_id'] ?? 0),
+            'area_id' => (int)($_GET['area_id'] ?? 0),
+            'search' => trim($_GET['search'] ?? ''),
+            'period' => preg_match('/^\d{4}(?:-\d{4})?$/', $_GET['period'] ?? '') ? $_GET['period'] : '',
+            'balance_type' => in_array($_GET['balance_type'] ?? '', $types, true) ? $_GET['balance_type'] : '',
+            'active' => $active,
+            'balance_status' => $balanceStatus,
+            'min_days' => is_numeric($_GET['min_days'] ?? null) ? $_GET['min_days'] : '',
+            'max_days' => is_numeric($_GET['max_days'] ?? null) ? $_GET['max_days'] : '',
+            'historical_only' => !empty($_GET['historical_only']),
+            'expiring_only' => !empty($_GET['expiring_only']),
+            'sort' => trim($_GET['sort'] ?? 'pending_desc'),
+            'page' => max(1, (int)($_GET['page'] ?? 1)),
+            'per_page' => max(10, min(200, (int)($_GET['per_page'] ?? 50))),
+        ];
+    }
+
+    private function buildVacationStats(array $rows) {
+        $stats = [
+            'employees_with_pending'=>0, 'total_pending'=>0, 'historical_pending'=>0,
+            'current_pending'=>0, 'expiring_credits'=>0, 'without_agreement'=>0,
+            'without_current_liquidation'=>0, 'by_company'=>[], 'by_agreement'=>[],
+        ];
+        foreach ($rows as $row) {
+            $pending = (float)$row->total_pending;
+            if ($pending > 0) $stats['employees_with_pending']++;
+            $stats['total_pending'] += $pending;
+            $stats['historical_pending'] += (float)$row->historical_pending;
+            $stats['current_pending'] += (float)$row->current_pending;
+            if (!empty($row->has_expiring_credit)) $stats['expiring_credits']++;
+            if (empty($row->effective_agreement_id)) $stats['without_agreement']++;
+            if (empty($row->has_current_liquidation)) $stats['without_current_liquidation']++;
+            $company = $row->company_name ?: 'Sin empresa';
+            $agreement = $row->agreement_name ?: 'Sin convenio';
+            $stats['by_company'][$company] = ($stats['by_company'][$company] ?? 0) + $pending;
+            $stats['by_agreement'][$agreement] = ($stats['by_agreement'][$agreement] ?? 0) + $pending;
+        }
+        arsort($stats['by_company']);
+        arsort($stats['by_agreement']);
+        return $stats;
     }
 
     private function view($view, $data = []) {

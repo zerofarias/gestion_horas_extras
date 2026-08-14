@@ -5,7 +5,7 @@ Sistema web interno de Recursos Humanos para múltiples empresas. Centraliza emp
 Este documento está dirigido a desarrolladores, administradores y agentes nuevos que necesiten comprender, mantener o desplegar el proyecto sin contexto previo.
 
 > [!IMPORTANT]
-> El repositorio contiene una aplicación funcional y una base local ya evolucionada, pero actualmente **no contiene todas las migraciones SQL que el propio código referencia**. No se puede garantizar una instalación desde cero hasta recuperar y versionar esas migraciones o disponer de un dump autorizado y saneado de la base.
+> El repositorio contiene una aplicación funcional y una base local ya evolucionada, pero actualmente **no contiene todas las migraciones SQL históricas que el propio código referencia**. La evolución de vacaciones v2 sí está versionada en `migration_vacation_management_v2.sql`; para una instalación completa desde cero todavía hace falta recuperar las migraciones anteriores o un dump autorizado y saneado.
 
 > [!CAUTION]
 > Es un sistema de RR. HH. y procesa información personal y laboral sensible. Nunca copiar datos reales, DNI, recibos, firmas, certificados, credenciales o dumps productivos a Git, tickets, prompts, logs o entornos no autorizados.
@@ -23,7 +23,7 @@ Este documento está dirigido a desarrolladores, administradores y agentes nuevo
 - Vacaciones usa convenios, reglas por antigüedad, períodos y un ledger de movimientos.
 - Varios módulos dependen de tablas opcionales y se deshabilitan si su esquema no está disponible.
 - `AdminController.php` concentra gran parte de la lógica histórica y debe modificarse con cuidado.
-- No existen pruebas automatizadas ni `composer.lock` en el estado actual.
+- Vacaciones v2 tiene una prueba de aceptación transaccional; el resto del sistema aún no posee una suite automatizada completa ni `composer.lock`.
 - Antes de cualquier despliegue, leer las secciones **Estado de migraciones**, **Seguridad** y **Problemas conocidos**.
 
 ## 2. Capacidades funcionales
@@ -37,7 +37,7 @@ Este documento está dirigido a desarrolladores, administradores y agentes nuevo
 | Asistencia | Tardanzas, ausencias, salida anticipada, falta de salida, licencias y justificaciones | Funcional |
 | Horas extras | Carga del empleado, cálculo 50/100 %, revisión, cierre y exportación | Funcional con reglas a revisar |
 | Solicitudes | Vacaciones, cambio de turno, llegada tardía, salida temprana, examen y otros motivos | Funcional |
-| Vacaciones | Convenios, reglas, saldos, movimientos FIFO, importación y liquidación masiva | Implementado; requiere validación laboral y transaccional |
+| Vacaciones | Convenios precargados, períodos anuales, saldos históricos, créditos, FIFO, solicitudes parciales y tablero multiempresa | Implementado en vacaciones v2; las reglas deben validarse ante cambios normativos |
 | Incidencias | Llamado de atención, sanción, suspensión, telegrama de despido y adjuntos | Registro documental; no es un offboarding completo |
 | Sugerencias | Buzón por empresa sin guardar el usuario emisor | Básico; sin workflow de respuesta |
 | Recibos | Carga, notificación, visualización, firma, fecha e IP | Implementado |
@@ -251,6 +251,7 @@ El formato actual del ingreso es `usuario+contraseña` dentro de un único campo
 | --- | --- |
 | `/request/index` | Historial y formularios |
 | `/request/create` | Crear licencia/ausencia/vacaciones |
+| `/request/vacationPreview` | Vista previa JSON de días computables, FIFO y saldo posterior |
 | `/request/createShiftSwap` | Proponer cambio de turno |
 | `/request/streamCertificate/{id}` | Ver certificado propio |
 
@@ -264,10 +265,38 @@ Tipos observados en la base local: Vacaciones, Cambio de Turno, Llegada Tardía,
 | `/vacationAdmin/editAgreement/{id}` | Convenio y reglas |
 | `/vacationAdmin/vacationSetup/{userId}` | Carga inicial por empleado |
 | `/vacationAdmin/calculateVacationPreview/{userId}` | Previsualizar cálculo |
+| `/vacationAdmin/addHistoricalBalance/{userId}` | Reconocer deuda histórica con motivo y auditoría |
+| `/vacationAdmin/addConventionalCredit/{userId}` | Cargar crédito separado con vencimiento |
+| `/vacationAdmin/convertBalance/{userId}` | Convertir unidades corridos/hábiles con fundamento |
 | `/vacationAdmin/liquidateUser/{userId}` | Liquidar período individual |
 | `/vacationAdmin/liquidateCompanyBatch` | Liquidación masiva |
-| `/vacationAdmin/reports` | Saldos y alertas |
-| `/vacationAdmin/exportVacationBalancesCsv` | Exportación de saldos |
+| `/vacationAdmin/reports` | Tablero multiempresa “Vacaciones pendientes” |
+| `/vacationAdmin/exportVacationBalancesCsv` | Exportación que conserva filtros y orden |
+
+#### Vacaciones v2: reglas de negocio
+
+- Los períodos ordinarios son años calendario (`2025`, `2026`, etc.).
+- Los saldos se separan por tipo: `annual`, `historical` y `conventional_credit`.
+- Un empleado puede pedir parcialmente desde 7 días computables. Pedir 7 de 21 deja 14 pendientes; el período solo cierra al llegar a cero.
+- La aprobación consume por FIFO: primero el período abierto más antiguo. Cada movimiento guarda el período, las fechas imputadas y el horario previo del planificador.
+- Cancelar/rechazar una solicitud ya aprobada restaura los mismos períodos y los horarios que existían antes de aprobarla.
+- Saldos históricos: RR. HH. carga año, días y motivo; no vencen.
+- Créditos convencionales: se mantienen separados y pueden vencer. Ejecutar diariamente `php scripts/expire_vacation_credits.php` para cerrar y auditar créditos vencidos.
+- Si el saldo fue generado con una unidad distinta de la regla vigente (`calendar`, `weekdays`, `business_mon_sat`), la aprobación se bloquea hasta que RR. HH. realice una conversión auditada.
+- Advertencias convencionales (anticipación, inicio o fraccionamiento SOECRA) no impiden presentar la solicitud, pero exigen una justificación de excepción al aprobar.
+- La pantalla de RR. HH. admite empresa, convenio, área, empleado/documento, período, tipo, actividad, rango de días, históricos y próximos vencimientos; la consulta está agregada para evitar N+1.
+
+Convenios precargados por la migración, sin asignación automática:
+
+| Código | Regla anual | Conteo / particularidad |
+| --- | --- | --- |
+| `CEC` | 14 / 21 / 28 / 35 | Corridos; aviso 60 días |
+| `FARMACIA-430-05` | 17 / 26 / 35 / 44 | Corridos; aviso 60 días; lunes o siguiente hábil |
+| `SOECRA-761-19` | 14 / 21 / 28 / 35 | Lunes a sábado sin domingos ni feriados; tramos 14 + 7 |
+| `UTEDYC-2023` | 16 / 21 / 28 / 35 | Corridos; crédito transitorio separado |
+| `SANIDAD-122-75` | LCT 14 / 21 / 28 / 35 | Vacación ordinaria separada de licencias convencionales especiales |
+
+Las fuentes de análisis fueron los convenios entregados con el proyecto (CCT 130/75, CCT 430/05 Córdoba, CCT 761/19, UTEDYC–FEDEDAC–AREDA 2023 y CCT 122/75). Esta configuración no reemplaza la revisión laboral/contable ante reformas, homologaciones o casos particulares.
 
 ### Recibos, anuncios y notificaciones
 
@@ -642,20 +671,11 @@ En turnos partidos se agregan minutos y extremos del día. Un agente debe revisa
 
 ### Vacaciones
 
-La implementación permite:
+La implementación v2 usa años calendario, calcula la antigüedad al 31 de diciembre y permite conteo corrido, lunes a viernes o lunes a sábado excluyendo feriados. Los saldos ordinarios, históricos y convencionales se registran por separado; el consumo parcial es FIFO y las aprobaciones/cancelaciones son transaccionales con bloqueo de filas, idempotencia y restauración del planificador.
 
-- período configurable;
-- reglas por rango de meses de antigüedad;
-- días hábiles o corridos;
-- consumo FIFO de períodos abiertos;
-- movimientos de accrual, take, reversal e import;
-- aprobación desde solicitudes y planificación.
-
-Para el régimen general de la LCT, el artículo 150 contempla días corridos y determina la extensión según antigüedad al 31 de diciembre. La implementación actual suele tomar la antigüedad al inicio del período, por lo que debe validarse por convenio.
+Los períodos y movimientos son la fuente de verdad. `users.vacation_days_available` es únicamente un caché recalculado después de cada movimiento.
 
 Referencia oficial: <https://www.argentina.gob.ar/normativa/nacional/ley-20744-25552/actualizacion>
-
-Además, la atomicidad del descuento, movimiento, planificación y estado de solicitud debe revisarse: varias clases crean conexiones `Database` independientes.
 
 ## 12. Seguridad y privacidad
 
@@ -711,7 +731,7 @@ Además, la atomicidad del descuento, movimiento, planificación y estado de sol
 - `migration_prode_wc2026.sql`
 - y más migraciones intermedias.
 
-Esos archivos no están actualmente en el repositorio.
+La mayoría de esos archivos históricos no están actualmente en el repositorio. `migration_vacation_management_v2.sql` sí está versionada, documentada en `MIGRATIONS.md` e incorporada como paso 38 del generador de hosting.
 
 Plan recomendado:
 
@@ -768,6 +788,14 @@ php scripts\hosting_smoke_test.php
 
 El smoke test comprueba tablas esenciales, datos históricos mínimos, rol supervisor y semillas PRODE.
 
+### Pruebas de vacaciones v2
+
+```powershell
+php scripts\test_vacation_acceptance.php
+```
+
+La prueba usa la base local configurada, crea datos temporales dentro de una transacción y siempre ejecuta rollback. Valida solicitud parcial, FIFO 2025→2026, reversión exacta, restauración del planificador, separación de saldos históricos, reglas SOECRA y reporte agregado.
+
 ### Prueba HTTP básica
 
 ```powershell
@@ -798,7 +826,6 @@ git ls-files | rg -i '(dni|document|recibo|signature|certificate|\.sql$|\.env$)'
 - Bloquear y retirar documentación personal accesible desde `public/uploads/documents`.
 - Remover esos archivos del historial Git y realizar el procedimiento interno de incidente.
 - Corregir la regla de horas extras del sábado y validar reglas nocturnas/convenios.
-- Compartir una única conexión/unidad de trabajo en las transacciones de vacaciones.
 - Recuperar y versionar migraciones.
 - Migrar integraciones a TLS.
 
@@ -815,7 +842,7 @@ git ls-files | rg -i '(dni|document|recibo|signature|certificate|\.sql$|\.env$)'
 ### Mantenibilidad
 
 - Dividir `AdminController` por dominios: usuarios, asistencia, horas extras, solicitudes, horarios, incidencias y reportes.
-- Evitar que cada modelo/servicio cree su propia conexión cuando participa de una misma transacción.
+- Mantener la inyección de una única conexión en toda nueva operación compuesta de vacaciones.
 - Introducir repositorios o servicios con dependencias inyectadas.
 - Documentar estados y transiciones de solicitudes, horas, cierres, adelantos y recibos.
 - Crear pruebas de integración con una base efímera.
@@ -898,6 +925,8 @@ git ls-files | rg -i '(dni|document|recibo|signature|certificate|\.sql$|\.env$)'
 - Verificar reglas por antigüedad.
 - Liquidar/importar el período.
 - Revisar movimientos y no corregir únicamente el saldo cacheado en `users`.
+- Si existe un crédito vencido, ejecutar `php scripts/expire_vacation_credits.php` y revisar el movimiento `expiry`.
+- Si aparece una incompatibilidad de unidades, usar la conversión auditada desde la ficha de vacaciones; no editar saldos directamente.
 
 ### Correo no disponible
 

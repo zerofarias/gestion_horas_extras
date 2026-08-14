@@ -1346,6 +1346,15 @@ class AdminController {
         if (isSupervisor()) {
             $allRequests = filterStaffRowsByUserArea($allRequests);
         }
+        if (function_exists('vacation_module_ready') && vacation_module_ready()) {
+            $vacationTypeId = $this->requestModel->getVacationRequestTypeId();
+            $vacationLedger = new VacationLedgerService();
+            foreach ($allRequests as $requestRow) {
+                if ($requestRow->status === 'Pendiente' && (int)$requestRow->request_type_id === (int)$vacationTypeId) {
+                    $requestRow->vacation_preview = $vacationLedger->previewRequest($requestRow);
+                }
+            }
+        }
         $calendarEvents = array();
         if(!empty($allRequests)){
             foreach($allRequests as $request){
@@ -1480,11 +1489,12 @@ class AdminController {
             }
 
             if ($action === 'reject') {
-                if ($this->requestModel->updateRequestStatus($id, 'Rechazado')) {
-                    $_SESSION['flash_success'] = 'Solicitud rechazada.';
+                $rejectResult = $this->rejectRequestWithVacationReversal($id, $request);
+                if ($rejectResult['ok']) {
+                    $_SESSION['flash_success'] = $rejectResult['message'];
                     redirect('admin/requests');
                 }
-                $_SESSION['flash_error'] = 'No se pudo rechazar la solicitud.';
+                $_SESSION['flash_error'] = $rejectResult['message'];
                 redirect($redirectUrl);
             }
 
@@ -1551,35 +1561,30 @@ class AdminController {
         $isVacation = $vacationRequestTypeId && (int)$request->request_type_id === $vacationRequestTypeId;
 
         if ($isVacation && vacation_module_ready()) {
-            $ledger = new VacationLedgerService();
             $adminId = (int)($_SESSION['user_id'] ?? 0);
-            // Transacción: el descuento de días y el cambio de estado son atómicos.
             $db = new Database();
-            $ownTx = !$db->inTransaction();
-            if ($ownTx) {
-                $db->beginTransaction();
-            }
+            $db->beginTransaction();
             try {
-                $takeResult = $ledger->applyTakeFromRequest($request, $adminId);
+                $requestTx = new Request($db);
+                $lockedRequest = $requestTx->getRequestByIdForUpdate($id);
+                if (!$lockedRequest || $lockedRequest->status !== 'Pendiente') {
+                    $db->rollBack();
+                    return ['ok' => false, 'message' => 'La solicitud ya fue procesada por otro administrador.'];
+                }
+                $ledger = new VacationLedgerService($db);
+                $exceptionReason = trim(strip_tags($_POST['vacation_exception_reason'] ?? ''));
+                $takeResult = $ledger->applyTakeFromRequest($lockedRequest, $adminId, $exceptionReason);
                 if (!$takeResult['ok']) {
-                    if ($ownTx) {
-                        $db->rollBack();
-                    }
+                    $db->rollBack();
                     return $takeResult;
                 }
-                if (!$this->requestModel->updateRequestStatus($id, 'Aprobado')) {
-                    if ($ownTx) {
-                        $db->rollBack();
-                    }
+                if (!$requestTx->updateRequestStatus($id, 'Aprobado')) {
+                    $db->rollBack();
                     return ['ok' => false, 'message' => 'Error al aprobar la solicitud.'];
                 }
-                if ($ownTx) {
-                    $db->commit();
-                }
+                $db->commit();
             } catch (Throwable $e) {
-                if ($ownTx) {
-                    $db->rollBack();
-                }
+                $db->rollBack();
                 return ['ok' => false, 'message' => 'Error al aprobar la solicitud.'];
             }
             return ['ok' => true, 'message' => 'Vacaciones aprobadas. ' . $takeResult['message']];
@@ -1628,6 +1633,36 @@ class AdminController {
         return ['ok' => false, 'message' => 'Error al aprobar la solicitud.'];
     }
 
+    private function rejectRequestWithVacationReversal($id, $request = null) {
+        $request = $request ?: $this->requestModel->getRequestById($id);
+        if (!$request) return ['ok'=>false, 'message'=>'Solicitud no encontrada.'];
+        $vacationTypeId = $this->requestModel->getVacationRequestTypeId();
+        $isApprovedVacation = $request->status === 'Aprobado'
+            && (int)$request->request_type_id === (int)$vacationTypeId
+            && function_exists('vacation_module_ready') && vacation_module_ready();
+        if (!$isApprovedVacation) {
+            return $this->requestModel->updateRequestStatus($id, 'Rechazado')
+                ? ['ok'=>true, 'message'=>'Solicitud rechazada.']
+                : ['ok'=>false, 'message'=>'No se pudo rechazar la solicitud.'];
+        }
+        $db = new Database();
+        $db->beginTransaction();
+        try {
+            $requestTx = new Request($db);
+            $locked = $requestTx->getRequestByIdForUpdate($id);
+            if (!$locked || $locked->status !== 'Aprobado') throw new RuntimeException('La solicitud cambió de estado.');
+            $reversal = (new VacationLedgerService($db))->reverseRequest($id, (int)$_SESSION['user_id']);
+            if (!$reversal['ok'] || !$requestTx->updateRequestStatus($id, 'Rechazado')) {
+                throw new RuntimeException($reversal['message'] ?? 'No se pudo cancelar.');
+            }
+            $db->commit();
+            return ['ok'=>true, 'message'=>'Solicitud cancelada y días restaurados a sus períodos originales.'];
+        } catch (Throwable $e) {
+            $db->rollBack();
+            return ['ok'=>false, 'message'=>$e->getMessage()];
+        }
+    }
+
     public function approveRequest($id){
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             redirect('admin/requests');
@@ -1661,11 +1696,8 @@ class AdminController {
             $_SESSION['flash_error'] = 'Solicitud no encontrada.';
             redirect('admin/requests');
         }
-        if($this->requestModel->updateRequestStatus($id, 'Rechazado')){
-            $_SESSION['flash_success'] = 'Solicitud rechazada.';
-        } else {
-            $_SESSION['flash_error'] = 'Error al rechazar la solicitud.';
-        }
+        $result = $this->rejectRequestWithVacationReversal($id, $request);
+        $_SESSION[$result['ok'] ? 'flash_success' : 'flash_error'] = $result['message'];
         redirect('admin/requests');
     }
 
@@ -1707,6 +1739,25 @@ class AdminController {
                 $result = $this->approveRequestWithBalance($id, $updatedRequest);
                 $_SESSION[$result['ok'] ? 'flash_success' : 'flash_error'] = $result['message'];
                 redirect('admin/requests');
+            }
+
+            $vacationTypeId = $this->requestModel->getVacationRequestTypeId();
+            $isApprovedVacationEdit = $request->status === 'Aprobado'
+                && (int)$request->request_type_id === (int)$vacationTypeId
+                && function_exists('vacation_module_ready') && vacation_module_ready();
+            if ($isApprovedVacationEdit && $data['status'] !== 'Aprobado') {
+                $result = $this->rejectRequestWithVacationReversal($id, $request);
+                if (!$result['ok']) {
+                    $_SESSION['flash_error'] = $result['message'];
+                    redirect('admin/editRequest/' . $id);
+                }
+                $data['status'] = 'Rechazado';
+                if ($this->requestModel->updateRequest($data)) {
+                    $_SESSION['flash_success'] = $result['message'];
+                    redirect('admin/requests');
+                }
+                $_SESSION['flash_error'] = 'Los días fueron restaurados, pero no se pudieron guardar los demás cambios.';
+                redirect('admin/editRequest/' . $id);
             }
 
             if($this->requestModel->updateRequest($data)){

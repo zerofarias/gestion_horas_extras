@@ -6,8 +6,8 @@
 class WorkSchedule {
     private $db;
 
-    public function __construct(){
-        $this->db = new Database;
+    public function __construct($db = null){
+        $this->db = $db instanceof Database ? $db : new Database;
     }
 
     /**
@@ -36,7 +36,10 @@ class WorkSchedule {
      * Borra todas las entradas de un día para un usuario y luego inserta las nuevas.
      */
     public function saveDaySchedule($userId, $date, $entries) {
-        $this->db->beginTransaction();
+        $ownTx = !$this->db->inTransaction();
+        if ($ownTx) {
+            $this->db->beginTransaction();
+        }
         try {
             $this->db->query('DELETE FROM employee_schedules WHERE user_id = :user_id AND schedule_date = :schedule_date');
             $this->db->bind(':user_id', $userId);
@@ -58,10 +61,14 @@ class WorkSchedule {
                     $this->db->execute();
                 }
             }
-            $this->db->commit();
+            if ($ownTx) {
+                $this->db->commit();
+            }
             return true;
         } catch (Exception $e) {
-            $this->db->rollBack();
+            if ($ownTx) {
+                $this->db->rollBack();
+            }
             return false;
         }
     }

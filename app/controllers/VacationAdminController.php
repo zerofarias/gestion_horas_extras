@@ -397,10 +397,10 @@ class VacationAdminController {
 
     private function vacationReportFilters() {
         $types = ['annual', 'historical', 'conventional_credit'];
-        $active = in_array($_GET['active'] ?? 'active', ['active', 'inactive', 'all'], true)
-            ? $_GET['active'] : 'active';
-        $balanceStatus = in_array($_GET['balance_status'] ?? 'with', ['with', 'without', 'both'], true)
-            ? $_GET['balance_status'] : 'with';
+        $activeInput = $_GET['active'] ?? 'active';
+        $balanceStatusInput = $_GET['balance_status'] ?? 'with';
+        $active = in_array($activeInput, ['active', 'inactive', 'all'], true) ? $activeInput : 'active';
+        $balanceStatus = in_array($balanceStatusInput, ['with', 'without', 'both'], true) ? $balanceStatusInput : 'with';
         return [
             'company_id' => (int)($_GET['company_id'] ?? 0),
             'agreement_id' => (int)($_GET['agreement_id'] ?? 0),

@@ -266,13 +266,14 @@ function marcacionesQueryString($filters, $viewMode, $overrides = []) {
                         <?php endif; ?>
                     </td>
                     <td onclick="event.stopPropagation();"><?php echo marcClockBadge($g['device_name'], $clockMap); ?></td>
+                    <td class="small"><?php $scope = $g['events'][0] ?? null; echo htmlspecialchars(($scope->company_name ?? 'Sin asignar') . (!empty($scope->employee_branch_name) ? ' · ' . $scope->employee_branch_name : (!empty($scope->clock_branch_names) ? ' · ' . $scope->clock_branch_names : ''))); ?></td>
                     <td onclick="event.stopPropagation();"><?php echo marcMappingBadge($g['user_id']); ?></td>
                     <td class="text-center">
                         <span class="badge bg-light text-dark border"><?php echo count($g['events']); ?></span>
                     </td>
                 </tr>
                 <tr class="marc-detail-row">
-                    <td colspan="9" class="p-0">
+                    <td colspan="10" class="p-0">
                         <div class="collapse" id="<?php echo $rowId; ?>">
                             <div class="marc-detail-inner">
                                 <table class="table table-sm table-borderless">
@@ -316,6 +317,7 @@ function marcacionesQueryString($filters, $viewMode, $overrides = []) {
                         <th>Persona</th>
                         <th>Sistema</th>
                         <th>Reloj</th>
+                        <th>Empresa / sucursal</th>
                         <th>Fecha</th>
                         <th>Hora</th>
                         <th>Tipo</th>

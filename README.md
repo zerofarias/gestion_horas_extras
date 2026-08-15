@@ -882,6 +882,7 @@ Los valores viven en `system_settings` y `mail_settings`. Actualmente algunos se
 - Las personas **no** necesitan tener un ID de reloj: solo se crea un mapeo para quien efectivamente ficha.
 - El mapeo nuevo se identifica por **dispositivo + legajo**. Así una persona que rota por varias sucursales puede tener uno o varios legajos, incluso si otro reloj reutiliza el mismo número.
 - `admin/marcacionesTodas` filtra las fichadas sin mapear por el alcance del reloj y ofrece filtro de sucursal. Un reloj sin sucursal asignada permanece sin adjudicar: debe revisarse desde **Relojes y sucursales**.
+- Ejecutar también `migration_attendance_control_mode.sql`. Cada empleado queda inicialmente en **Obligatorio**; RR. HH. puede cambiarlo a **Flexible** o **Sin reloj** desde su ficha.
 
 El default histórico usa HTTP. En producción debe utilizarse HTTPS con certificado válido. No transmitir credenciales, tokens ni marcaciones por HTTP plano.
 

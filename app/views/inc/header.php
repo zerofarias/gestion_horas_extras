@@ -379,17 +379,13 @@ echo htmlspecialchars(implode(' ', $_bodyClasses), ENT_QUOTES, 'UTF-8');
                class="sidebar-nav-link <?php echo navIsActive('/admin/sync', '/admin/runApiSync'); ?>">
                 <i class="fas fa-fw fa-sync-alt"></i><span>Sincronización</span>
             </a>
-            <a href="<?php echo URLROOT; ?>/admin/mapeoApi"
-               class="sidebar-nav-link <?php echo navIsActive('/admin/mapeoApi', '/admin/saveMappingFromApi', '/admin/deleteMappingFromApi'); ?>">
-                <i class="fas fa-fw fa-link"></i><span>Mapeo de Relojes</span>
+            <a href="<?php echo URLROOT; ?>/admin/mapeoIncompleto"
+               class="sidebar-nav-link <?php echo navIsActive('/admin/mapeoIncompleto', '/admin/mapeoApi', '/admin/saveMappingFromApi', '/admin/deleteMappingFromApi'); ?>">
+                <i class="fas fa-fw fa-link"></i><span>Pendientes de identificación</span>
             </a>
             <a href="<?php echo URLROOT; ?>/admin/clockDevices"
                class="sidebar-nav-link <?php echo navIsActive('/admin/clockDevices', '/admin/saveClockDevice'); ?>">
                 <i class="fas fa-fw fa-stopwatch"></i><span>Relojes y sucursales</span>
-            </a>
-            <a href="<?php echo URLROOT; ?>/admin/mapeoIncompleto"
-               class="sidebar-nav-link <?php echo navIsActive('/admin/mapeoIncompleto'); ?>">
-                <i class="fas fa-fw fa-unlink"></i><span>Mapeo incompleto</span>
             </a>
             <a href="<?php echo URLROOT; ?>/admin/marcacionesTodas"
                class="sidebar-nav-link <?php echo navIsActive('/admin/marcacionesTodas', '/admin/marcaciones', '/admin/clockingsReport'); ?>">

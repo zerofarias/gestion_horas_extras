@@ -75,6 +75,7 @@ require APPROOT . '/views/inc/header.php'; ?>
                         </div>
                     </div>
                     <?php require APPROOT . '/views/admin/partials/user_branch_field.php'; ?>
+                    <?php require APPROOT . '/views/admin/partials/user_attendance_control_field.php'; ?>
                     <?php require APPROOT . '/views/admin/partials/user_area_field.php'; ?>
                     <div class="row">
                          <div class="col-md-6 mb-3">

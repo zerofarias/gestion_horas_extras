@@ -55,7 +55,7 @@ class Company {
     public function createCompany($name){
         $this->db->query('INSERT INTO companies (name) VALUES (:name)');
         $this->db->bind(':name', $name);
-        return $this->db->execute();
+        return $this->db->execute() ? (int)$this->db->lastInsertId() : 0;
     }
 
     public function updateCompany($id, $name, $showOvertime = null, $showCpExtras = null) {
@@ -78,6 +78,34 @@ class Company {
         }
         $this->db->bind(':id', $id);
         return $this->db->execute();
+    }
+
+    public function brandingReady() {
+        static $ready = null;
+        if ($ready !== null) return $ready;
+        try {
+            $this->db->query("SHOW COLUMNS FROM `companies` LIKE 'brand_color'");
+            $ready = (bool)$this->db->single();
+        } catch (Throwable $e) { $ready = false; }
+        return $ready;
+    }
+
+    public function getBranding($companyId) {
+        if (!$this->brandingReady()) return null;
+        $this->db->query('SELECT brand_color, logo_path FROM companies WHERE id = ?');
+        return $this->db->single([(int)$companyId]);
+    }
+
+    public function saveBranding($companyId, $color, $logoPath = null) {
+        if (!$this->brandingReady()) return false;
+        $color = strtoupper(trim((string)$color));
+        if (!preg_match('/^#[0-9A-F]{6}$/', $color)) return false;
+        if ($logoPath === null) {
+            $this->db->query('UPDATE companies SET brand_color = ? WHERE id = ?');
+            return $this->db->execute([$color, (int)$companyId]);
+        }
+        $this->db->query('UPDATE companies SET brand_color = ?, logo_path = ? WHERE id = ?');
+        return $this->db->execute([$color, $logoPath ?: null, (int)$companyId]);
     }
 
     public function locationReady() {

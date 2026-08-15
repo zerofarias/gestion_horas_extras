@@ -42,6 +42,9 @@ desktop.ini
 # === Logs ===
 *.log
 /logs/
+/backups/
+/output/
+/storage/private/
 
 # === Archivos temporales de Google Drive ===
 .tmp.driveupload/

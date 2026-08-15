@@ -98,8 +98,17 @@ class LoginController {
         $companyModel = new Company();
         $_SESSION['user_company_name'] = $companyModel->getNameById($user->company_id);
         $_SESSION['user_profile_picture'] = $user->profile_picture ?? 'default.png';
+        if (function_exists('access_control_ready') && access_control_ready()) {
+            $scope = (new AccessControl())->currentScopeForUser((int)$user->id);
+            if ($scope) {
+                $_SESSION['access_scope_id'] = (int)$scope->id;
+                $_SESSION['user_company_id'] = (int)$scope->company_id;
+                $_SESSION['user_branch_id'] = (int)($scope->branch_id ?? 0);
+                $_SESSION['user_company_name'] = $companyModel->getNameById((int)$scope->company_id);
+            }
+        }
 
-        if ($user->role === 'admin' || $user->role === 'supervisor') {
+        if (function_exists('access_is_staff') ? access_is_staff() : ($user->role === 'admin' || $user->role === 'supervisor')) {
             redirect('admin/dashboard');
         }
         redirect('employee/index');
@@ -119,6 +128,8 @@ class LoginController {
         unset($_SESSION['user_role']);
         unset($_SESSION['user_company_id']);
         unset($_SESSION['user_company_name']);
+        unset($_SESSION['user_branch_id']);
+        unset($_SESSION['access_scope_id']);
         unset($_SESSION['user_profile_picture']);
         session_destroy();
         redirect('login');

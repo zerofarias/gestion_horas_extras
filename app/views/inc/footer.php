@@ -141,5 +141,26 @@ $_uri = $_SERVER['REQUEST_URI'] ?? '';
     });
 }());
 </script>
+<?php if (isLoggedIn() && isStaffAdmin()): ?>
+<script>
+(function () {
+    function semanticState(element, text) {
+        var value = (text || '').trim().toLocaleLowerCase('es');
+        element.classList.toggle('ui-state-yes', value === 'sí' || value === 'si' || value === 'activo' || value === 'activa' || value === 'visible' || value === 'aprobado' || value === 'aprobada');
+        element.classList.toggle('ui-state-no', value === 'no' || value === 'inactivo' || value === 'inactiva' || value === 'oculto' || value === 'rechazado' || value === 'rechazada');
+    }
+    document.querySelectorAll('.page-content .badge').forEach(function (badge) {
+        semanticState(badge, badge.textContent);
+    });
+    document.querySelectorAll('.page-content select').forEach(function (select) {
+        var options = Array.from(select.options).map(function (option) { return option.textContent.trim().toLocaleLowerCase('es'); });
+        if (!options.some(function (text) { return text === 'sí' || text === 'si' || text === 'no'; })) return;
+        var sync = function () { semanticState(select, select.selectedOptions[0] ? select.selectedOptions[0].textContent : ''); };
+        select.addEventListener('change', sync);
+        sync();
+    });
+}());
+</script>
+<?php endif; ?>
 </body>
 </html>

@@ -43,6 +43,52 @@ class EmployeeRecord {
         ];
     }
 
+    /** Snapshot agregado para /admin/users; evita consultas N+1 por empleado. */
+    public function getUserListMetadata($companyId = null) {
+        if (!$this->isReady()) return [];
+        $branchSelect = "'' AS branch_names, 0 AS branch_count";
+        if ($this->tableExists('employee_branch_assignments')) {
+            $branchSelect = "(SELECT GROUP_CONCAT(b.name ORDER BY eba.is_primary DESC,b.name SEPARATOR ' · ')
+                    FROM employee_branch_assignments eba INNER JOIN company_branches b ON b.id=eba.branch_id
+                    WHERE eba.user_id=u.id) AS branch_names,
+                (SELECT COUNT(*) FROM employee_branch_assignments ebc WHERE ebc.user_id=u.id) AS branch_count";
+        }
+        $sql = "SELECT u.id AS user_id, eca.employee_number, eca.status AS employment_status,
+                eca.work_mode, eca.employment_type, eca.start_date, eca.end_date,
+                jp.name AS position_name, a.name AS area_name, su.full_name AS supervisor_name,
+                {$branchSelect},
+                EXISTS(SELECT 1 FROM employee_addresses ea WHERE ea.user_id=u.id AND ea.is_primary=1) AS has_structured_address,
+                EXISTS(SELECT 1 FROM employee_health_coverages ehc WHERE ehc.user_id=u.id AND ehc.is_primary=1 AND ehc.status IN ('activa','en_tramite')) AS has_health_coverage
+            FROM users u
+            LEFT JOIN employee_company_assignments eca ON eca.id=(
+                SELECT e2.id FROM employee_company_assignments e2
+                WHERE e2.user_id=u.id AND e2.company_id=u.company_id
+                ORDER BY e2.is_primary DESC,e2.id DESC LIMIT 1
+            )
+            LEFT JOIN job_positions jp ON jp.id=eca.position_id
+            LEFT JOIN areas a ON a.id=eca.area_id
+            LEFT JOIN users su ON su.id=eca.supervisor_user_id";
+        $params = [];
+        if ((int)$companyId > 0) {
+            $sql .= ' WHERE u.company_id=?';
+            $params[] = (int)$companyId;
+        }
+        $this->db->query($sql);
+        $rows = $this->db->resultSet($params);
+        $map = [];
+        foreach ($rows as $row) $map[(int)$row->user_id] = $row;
+        return $map;
+    }
+
+    private function tableExists($table) {
+        try {
+            $this->db->query('SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? LIMIT 1');
+            return (bool)$this->db->single([(string)$table]);
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
     public function getAssignments($userId) {
         if (!$this->isReady()) return [];
         $this->db->query('SELECT eca.*, c.name AS company_name, a.name AS area_name, jp.name AS position_name,

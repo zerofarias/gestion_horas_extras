@@ -107,6 +107,23 @@ class User {
         return array_key_exists($value, self::organizationGroupOptions()) ? $value : 'paviotti';
     }
 
+    public static function attendanceControlOptions() {
+        return ['required' => 'Obligatorio — genera alertas', 'flexible' => 'Flexible — registra sin alertas', 'no_clock' => 'Sin reloj — no controla fichadas'];
+    }
+
+    public static function normalizeAttendanceControlMode($value) {
+        $value = strtolower(trim((string)$value));
+        return array_key_exists($value, self::attendanceControlOptions()) ? $value : 'required';
+    }
+
+    public function isAttendanceControlReady() {
+        static $ready = null;
+        if ($ready !== null) return $ready;
+        try { $this->db->query("SHOW COLUMNS FROM users LIKE 'attendance_control_mode'"); $ready = (bool)$this->db->single(); }
+        catch (Throwable $e) { $ready = false; }
+        return $ready;
+    }
+
     /** Campos de perfil desde POST (crear / editar usuario). */
     public static function profileFromPost(array $post) {
         $sex = isset($post['sex']) ? trim((string)$post['sex']) : '';
@@ -293,6 +310,10 @@ class User {
             $cols[] = 'branch_id';
             $vals[] = isset($data['branch_id']) && (int)$data['branch_id'] > 0 ? (int)$data['branch_id'] : null;
         }
+        if ($this->isAttendanceControlReady()) {
+            $cols[] = 'attendance_control_mode';
+            $vals[] = self::normalizeAttendanceControlMode($data['attendance_control_mode'] ?? 'required');
+        }
 
         $cols = array_merge($cols, $this->employmentColumnNames());
         $vals = array_merge($vals, $this->employmentValues($data));
@@ -350,6 +371,10 @@ class User {
         if ($this->isBranchAssignmentReady()) {
             $sets[] = 'branch_id = ?';
             $vals[] = isset($data['branch_id']) && (int)$data['branch_id'] > 0 ? (int)$data['branch_id'] : null;
+        }
+        if ($this->isAttendanceControlReady()) {
+            $sets[] = 'attendance_control_mode = ?';
+            $vals[] = self::normalizeAttendanceControlMode($data['attendance_control_mode'] ?? 'required');
         }
         if ($profileReady) {
             $sets = array_merge($sets, [

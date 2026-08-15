@@ -27,6 +27,10 @@ function employee_portal_can($feature) {
     if (!setting_bool($map[$feature], true)) {
         return false;
     }
+    if (function_exists('access_portal_feature_allowed')
+        && !access_portal_feature_allowed(access_feature_key_for_portal($feature), true)) {
+        return false;
+    }
     if ($feature === 'overtime' && function_exists('overtime_empleado_scope_allowed')) {
         return overtime_empleado_scope_allowed();
     }

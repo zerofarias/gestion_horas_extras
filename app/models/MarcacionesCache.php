@@ -267,4 +267,9 @@ class MarcacionesCache {
         if (trim((string)$deviceName) !== '') $this->db->bind(':device_name', trim((string)$deviceName));
         return $this->db->execute();
     }
+
+    public function getDeviceNamesForUserDay($userId, $workDate) {
+        $this->db->query('SELECT DISTINCT device_name FROM marcaciones_cache WHERE user_id = ? AND DATE(event_time) = ? AND device_name IS NOT NULL ORDER BY device_name');
+        return array_map(function ($row) { return $row->device_name; }, $this->db->resultSet([(int)$userId, $workDate]));
+    }
 }

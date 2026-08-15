@@ -18,6 +18,15 @@ la migración falla.
 El generador `scripts/build_migration_hosting_full.sh` la incorpora como paso `39`, después
 de vacaciones v2 y de las tablas históricas de convenios requeridas por sus claves foráneas.
 
+## Permisos por empresa y sucursal
+
+Archivo: `migration_access_control_scopes.sql`.
+
+Requiere `users`, `companies` y `company_branches`. Crea asignaciones de acceso por
+empresa/sucursal, políticas heredables de módulos del portal, excepciones por empleado y
+auditoría. La migración conserva `users.role` como compatibilidad y genera el perfil
+inicial Operario, Encargado o Administrador a partir del rol histórico.
+
 ## Vacaciones v2
 
 Archivo: `migration_vacation_management_v2.sql`
@@ -144,3 +153,27 @@ No se incluye rollback automático porque eliminar columnas de auditoría puede 
 3. conservar una copia de los movimientos generados para conciliación;
 4. corregir y volver a ejecutar la migración en un entorno de prueba;
 5. nunca “arreglar” solamente `users.vacation_days_available`: es un caché, no la fuente de verdad.
+
+## Programa integral RRHH, Operaciones y Talento (2026-08)
+
+Archivo: `migration_hr_operations_talent.sql`.
+
+Aplicación recomendada, después de un dump autorizado:
+
+```powershell
+php scripts/apply_hr_operations_talent_migration.php
+```
+
+La migración es repetible y deja el checksum en `schema_migrations` con la clave `2026_08_hr_operations_talent`. Incluye permisos granulares, auditoría append-only, cierres de asistencia, sanciones, vencimientos, EPP, activos, ATS, onboarding, desempeño, metadatos de capacitación, KPIs, tareas programadas y feature flags por empresa.
+
+Verificación mínima:
+
+```powershell
+php -l app/controllers/RecruitingController.php
+php -l app/controllers/PerformanceController.php
+php tests/test_simple_pdf.php
+php scripts/verify_audit_chain.php
+php scripts/process_hr_expirations.php
+```
+
+Rollback: restaurar el dump previo. No se provee un SQL destructivo porque los dominios contienen constancias, custodias y auditoría que no deben perderse.

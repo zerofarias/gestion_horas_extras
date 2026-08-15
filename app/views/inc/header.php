@@ -112,9 +112,10 @@ $_brandLogoUrl = function_exists('company_brand_logo_url') ? company_brand_logo_
 $_brandName = function_exists('company_brand_display_name') ? company_brand_display_name() : (defined('SITENAME') ? SITENAME : 'RRHH');
 $_brandSubtitle = function_exists('company_brand_subtitle') ? company_brand_subtitle() : 'Gestión de RRHH';
 $_bodyBrandClass = function_exists('company_brand_body_class') ? company_brand_body_class() : '';
+$_brandCssVariables = function_exists('company_brand_css_variables') ? company_brand_css_variables() : '';
 $_usesCpNav = function_exists('current_user_uses_casapav_tasks') && current_user_uses_casapav_tasks();
 $_pageTitles = [
-    '/admin/dashboard' => 'Dashboard', '/admin/users' => 'Usuarios',
+    '/admin/dashboard' => 'Dashboard', '/admin/editUser' => 'Editar usuario', '/admin/editCompany' => 'Editar empresa', '/admin/companies' => 'Empresas', '/admin/users' => 'Usuarios',
     '/admin/calendar' => 'Calendario', '/admin/weeklyPlanner' => 'Planificador semanal',
     '/admin/attendance' => 'Asistencia', '/admin/requests' => 'Solicitudes',
     '/employee/index' => 'Inicio', '/employee/profile' => 'Mi perfil',
@@ -141,16 +142,22 @@ foreach ($_pageTitles as $_titlePath => $_titleLabel) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="<?php echo URLROOT; ?>/css/style.css">
+    <?php if ($_brandCssVariables !== ''): ?><style>:root{<?php echo htmlspecialchars($_brandCssVariables, ENT_QUOTES, 'UTF-8'); ?>}</style><?php endif; ?>
     <?php if (isLoggedIn() && function_exists('notifications_is_ready') && notifications_is_ready()): ?>
     <link rel="stylesheet" href="<?php echo URLROOT; ?>/css/notifications.css">
     <meta name="csrf-token" content="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
     <?php endif; ?>
 </head>
-<body<?php
-echo isLoggedIn()
-    ? ($_bodyBrandClass !== '' ? ' class="' . htmlspecialchars($_bodyBrandClass) . '"' : '')
-    : ' class="auth-page"';
-?>>
+<body class="<?php
+$_bodyClasses = [];
+if (!isLoggedIn()) {
+    $_bodyClasses[] = 'auth-page';
+} else {
+    $_bodyClasses[] = isStaffAdmin() ? 'app-staff' : 'app-employee';
+    if ($_bodyBrandClass !== '') $_bodyClasses[] = $_bodyBrandClass;
+}
+echo htmlspecialchars(implode(' ', $_bodyClasses), ENT_QUOTES, 'UTF-8');
+?>">
 
 <?php if(isLoggedIn()): ?>
 
@@ -215,8 +222,8 @@ echo isLoggedIn()
                     <span class="sidebar-badge"><?php echo (int)$_pendingRequestsCount; ?></span>
                 <?php endif; ?>
             </a>
-            <a href="<?php echo URLROOT; ?>/admin/attendance"
-               class="sidebar-nav-link <?php echo navIsActive('/admin/attendance'); ?>">
+            <a href="<?php echo URLROOT; ?>/admin/controlAsistencia"
+               class="sidebar-nav-link <?php echo navIsActive('/admin/controlAsistencia', '/admin/attendance'); ?>">
                 <i class="fas fa-fw fa-user-check"></i><span>Asistencia</span>
             </a>
 
@@ -256,6 +263,16 @@ echo isLoggedIn()
                class="sidebar-nav-link <?php echo navIsActive('/admin/holidays'); ?>">
                 <i class="fas fa-fw fa-star"></i><span>Feriados</span>
             </a>
+
+            <div class="sidebar-section-title">RRHH integral</div>
+            <?php if(access_can('attendance.prepare')):?><a href="<?php echo URLROOT; ?>/admin/attendanceClosures" class="sidebar-nav-link <?php echo navIsActive('/admin/attendanceClosures'); ?>"><i class="fas fa-fw fa-lock"></i><span>Cierres de asistencia</span></a><?php endif; ?>
+            <?php if(access_can('expirations.manage')):?><a href="<?php echo URLROOT; ?>/expirations" class="sidebar-nav-link <?php echo navIsActive('/expirations'); ?>"><i class="fas fa-fw fa-hourglass-half"></i><span>Vencimientos</span></a><?php endif; ?>
+            <?php if(access_can('ppe.issue')):?><a href="<?php echo URLROOT; ?>/ppe" class="sidebar-nav-link <?php echo navIsActive('/ppe'); ?>"><i class="fas fa-fw fa-hard-hat"></i><span>EPP y ropa</span></a><?php endif; ?>
+            <?php if(access_can('assets.assign')):?><a href="<?php echo URLROOT; ?>/assets" class="sidebar-nav-link <?php echo navIsActive('/assets'); ?>"><i class="fas fa-fw fa-laptop"></i><span>Activos</span></a><?php endif; ?>
+            <?php if(access_can('recruiting.review')):?><a href="<?php echo URLROOT; ?>/recruiting" class="sidebar-nav-link <?php echo navIsActive('/recruiting'); ?>"><i class="fas fa-fw fa-user-plus"></i><span>Reclutamiento</span></a><?php endif; ?>
+            <?php if(access_can('performance.evaluate')):?><a href="<?php echo URLROOT; ?>/performance" class="sidebar-nav-link <?php echo navIsActive('/performance'); ?>"><i class="fas fa-fw fa-chart-line"></i><span>Desempeño</span></a><?php endif; ?>
+            <?php if(access_can('metrics.operational')||access_can('metrics.strategic')):?><a href="<?php echo URLROOT; ?>/hrMetrics" class="sidebar-nav-link <?php echo navIsActive('/hrMetrics'); ?>"><i class="fas fa-fw fa-chart-pie"></i><span>KPIs RRHH</span></a><?php endif; ?>
+            <?php if(access_can('audit.view')):?><a href="<?php echo URLROOT; ?>/audit" class="sidebar-nav-link <?php echo navIsActive('/audit'); ?>"><i class="fas fa-fw fa-shield-alt"></i><span>Auditoría</span></a><?php endif; ?>
 
             <?php if (function_exists('learning_is_ready') && learning_is_ready()): ?>
             <div class="sidebar-section-title">Capacitación</div>
@@ -453,6 +470,7 @@ echo isLoggedIn()
                class="sidebar-nav-link <?php echo navIsActive('/employee/profile'); ?>">
                 <i class="fas fa-fw fa-user"></i><span>Mi perfil</span>
             </a>
+            <a href="<?php echo URLROOT; ?>/employee/hrDocuments" class="sidebar-nav-link <?php echo navIsActive('/employee/hrDocuments'); ?>"><i class="fas fa-fw fa-box-open"></i><span>Bienes y constancias</span></a>
             <?php if (function_exists('employee_portal_can') && employee_portal_can('suggestions')): ?>
             <a href="<?php echo URLROOT; ?>/suggestion/index"
                class="sidebar-nav-link <?php echo navIsActive('/suggestion/index'); ?>">
@@ -522,6 +540,18 @@ echo isLoggedIn()
             </button>
         </div>
         <div class="topbar-right">
+            <?php if (isLoggedIn() && function_exists('access_control_ready') && access_control_ready()):
+                $_accessScopes = (new AccessControl())->getScopesForUser((int)$_SESSION['user_id'], true);
+                $_activeScopeId = (int)($_SESSION['access_scope_id'] ?? 0);
+                if (count($_accessScopes) > 1): ?>
+            <form method="post" action="<?php echo URLROOT; ?>/access/setContext" class="topbar-company-form d-none d-md-flex align-items-center me-2" title="Contexto de trabajo activo">
+                <?php echo csrf_field(); ?>
+                <input type="hidden" name="return_url" value="<?php echo htmlspecialchars((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['REQUEST_URI'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                <select name="scope_id" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Cambiar contexto de trabajo">
+                    <?php foreach ($_accessScopes as $_scope): ?><option value="<?php echo (int)$_scope->id; ?>" <?php echo (int)$_scope->id === $_activeScopeId ? 'selected' : ''; ?>><?php echo htmlspecialchars($_scope->company_name . (!empty($_scope->branch_name) ? ' · ' . $_scope->branch_name : '') . ' · ' . (AccessControl::roles()[$_scope->access_role] ?? $_scope->access_role)); ?></option><?php endforeach; ?>
+                </select>
+            </form>
+            <?php endif; endif; ?>
             <?php if (hasRole('admin')):
                 $_companySwitcher = (new Company())->getAllCompanies();
                 $_activeCompanyId = (int)($_SESSION['user_company_id'] ?? 0);

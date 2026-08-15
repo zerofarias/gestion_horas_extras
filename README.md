@@ -49,6 +49,13 @@ Este documento está dirigido a desarrolladores, administradores y agentes nuevo
 | Casa Paviotti | Extras por tarea, tarifas, cierres y conexión a base de extintos | Específico del negocio |
 | Ecofarma | Consultas y exportación de comisiones | Específico del negocio |
 | PRODE | Pronósticos, partidos y ranking | Esquema presente; requiere semillas |
+| Seguridad y auditoría | Capacidades por módulo/alcance, eventos append-only con hash encadenado y correlación | Implementado por `migration_hr_operations_talent.sql` |
+| Cierre de asistencia | Preparación, congelado, reapertura auditada y paquete CSV/PDF sin importes | Implementado en `/admin/attendanceClosures` |
+| EPP y activos | Stock, entregas, acuses, custodia y movimientos patrimoniales | Implementado en `/ppe` y `/assets` |
+| Vencimientos | Tipos configurables, responsables, tablero y tarea idempotente | Implementado en `/expirations` |
+| Reclutamiento ATS | Portal público, CV privado, pipeline, IA asistida y preingreso | Implementado en `/careers` y `/recruiting` |
+| Desempeño | Plantillas y ciclos 90°/180° con objetivos y competencias | Implementado en `/performance` |
+| KPIs RRHH | Dotación, ausentismo, tardanzas, ATS, vencimientos y patrimonio, sin costos | Implementado en `/hrMetrics` |
 
 ### Alcances que no deben asumirse
 
@@ -132,8 +139,9 @@ Ejemplos:
 El layout compartido vive en `app/views/inc/header.php` y
 `app/views/inc/footer.php`; los estilos generales están en
 `public/css/style.css`. La interfaz utiliza Bootstrap 5 como base, un sidebar
-oscuro, acento rosa para la identidad general y azul para superficies de
-administración. Algunos módulos agregan hojas específicas:
+oscuro y una identidad visual dinámica por empresa. Cuando hay contexto activo,
+el color principal se aplica tanto al portal del empleado como a los controles y
+superficies del panel administrativo. Algunos módulos agregan hojas específicas:
 
 - `public/css/notifications.css`
 - `public/css/learning.css`
@@ -145,6 +153,9 @@ Reglas que deben preservarse al crear o modificar pantallas:
   debe permanecer visible en desktop y mobile.
 - La marca, el nombre del footer y el título de la pestaña se derivan del
   contexto activo cuando corresponde.
+- El logo y color de la empresa activa se resuelven desde `companies`; no usar
+  colores hardcodeados para acciones principales si ya existe una variable
+  `--clr-primary` equivalente.
 - Al cambiar de empresa se conserva la pantalla de colección actual. Si la URL
   identifica una ficha o recurso de la empresa anterior, se vuelve a su
   listado para no mezclar contextos.
@@ -166,6 +177,22 @@ estilos desde el bundle JavaScript; no agregar `main.min.css`, ya que esa ruta
 no existe en la distribución utilizada.
 
 ## 5. Roles, permisos y aislamiento
+
+> Compatibilidad: `users.role` continúa funcionando para instalaciones anteriores. Cuando
+> está instalada `migration_access_control_scopes.sql`, el perfil efectivo se resuelve por
+> empresa/sucursal activa desde `user_access_scopes`.
+
+### Perfiles con alcance
+
+- **Operario:** portal propio, sujeto a los módulos heredados de empresa, sucursal y excepción individual.
+- **Encargado:** control operativo de la sucursal asignada; no administra empleados ni permisos.
+- **Coordinador:** alcance operativo completo de una empresa, incluidas horas extras e incidencias.
+- **RRHH:** gestión de empleados, horarios, vacaciones y legajo en sus empresas asignadas.
+- **Administrador:** configuración global, integraciones, relojes y administración de permisos.
+
+Las políticas de portal se resuelven en este orden: configuración global, empresa,
+sucursal y excepción del usuario. Cada alcance admite `Heredar`, `Sí` o `No`; el valor
+más específico definido prevalece. Los cambios se auditan en `access_audit_log`.
 
 ### `admin`
 
@@ -199,8 +226,74 @@ no existe en la distribución utilizada.
 - `requireEmployeeRole()`
 - `adminCompanyId()`
 - `supervisorAreaId()`
+- `access_can($capability, $companyId, $branchId)`
+- `require_capability($capability)`
+
+Las capacidades operativas se asignan sobre cada `user_access_scope`. RRHH, coordinador y encargado reciben solamente los valores predeterminados de su perfil; EPP y activos patrimoniales nunca se conceden por el cargo y requieren una autorización explícita. La pantalla `/admin/editUser/{id}#permisos` permite permitir, denegar o heredar cada capacidad.
 
 Toda ruta nueva debe validar explícitamente rol y pertenencia a empresa. No confiar sólo en que la interfaz oculta un enlace.
+
+## Programa integral RRHH, Operaciones y Talento
+
+La migración `migration_hr_operations_talent.sql` agrega los dominios nuevos y registra su checksum en `schema_migrations`. Se aplica con respaldo previo:
+
+```powershell
+php scripts/apply_hr_operations_talent_migration.php
+```
+
+Rutas principales:
+
+| Ruta | Alcance |
+| --- | --- |
+| `/admin/attendanceClosures` | Preparar, cerrar/reabrir y exportar novedades mensuales versionadas |
+| `/expirations` | Documentos y certificaciones próximos a vencer |
+| `/ppe` | Catálogo, stock por sucursal y entrega de EPP/ropa |
+| `/assets` | Inventario serializado, asignación, transferencia, mantenimiento y baja |
+| `/recruiting` | Vacantes, candidatos, pipeline, CV autorizado, IA y preingreso |
+| `/careers` | Portal público sin cuenta y seguimiento mediante token privado |
+| `/performance` | Plantillas, ciclos y evaluaciones 90°/180° |
+| `/hrMetrics` | Indicadores operativos y estratégicos sin importes |
+| `/audit` | Consulta de la cadena de auditoría |
+| `/employee/hrDocuments` | Acuses con clave, activos vigentes y sanciones notificadas |
+
+### Reglas relevantes
+
+- El paquete mensual es informativo: nunca calcula salarios ni importes.
+- Los cierres guardan snapshot, número de versión y SHA-256. Toda reapertura exige motivo.
+- “Acuse de recibo con clave” registra usuario, fecha, IP, versión/hash; no se presenta como firma digital legal.
+- Los CV permanecen en `storage/private/cv`, admiten PDF/DOCX hasta 5 MB, se validan por MIME real y pueden pasar por ClamAV cuando `CLAMSCAN_BIN` está configurado.
+- La postulación posee rate limiting persistente, consentimiento versionado y token de seguimiento. Los no contratados se anonimizan al cumplir 24 meses.
+- La extracción del CV es local. A OpenAI se envía texto reducido y redactado, nunca el archivo. El análisis usa Responses API, salida estructurada y `store: false`; puntúa sólo criterios publicados, no rechaza candidatos y siempre exige revisión humana.
+- Antes de producción deben revisarse el consentimiento y la configuración de retención/monitoreo de la cuenta de API contra la documentación vigente de OpenAI.
+- `audit_events` impide `UPDATE` y `DELETE` mediante triggers. En producción, usar además un usuario de base exclusivo para la aplicación sin privilegios de modificación/borrado sobre esa tabla y una política de conservación de 10 años.
+
+### Tareas programadas
+
+```bash
+# Diario: actualiza estados y registra la corrida idempotente
+php scripts/process_hr_expirations.php
+
+# Mensual: elimina CV y anonimiza candidatos vencidos no contratados
+php scripts/purge_candidate_data.php
+
+# Control operativo o previo a auditoría
+php scripts/verify_audit_chain.php
+```
+
+Cada tarea usa `scheduled_job_runs` para evitar duplicados. Una corrida fallida queda registrada y debe investigarse antes de reintentar con una nueva clave de operación.
+
+### Configuración ATS
+
+En `app/config/config.local.php` (no versionado):
+
+```php
+define('OPENAI_API_KEY', '...');
+define('OPENAI_CV_MODEL', 'gpt-5.6-luna');
+define('PDFTOTEXT_BIN', 'C:/ruta/pdftotext.exe');
+define('CLAMSCAN_BIN', 'C:/ruta/clamscan.exe'); // recomendado en producción
+```
+
+Sin clave o sin servicio disponible, el ATS continúa operativo en modo manual. Sin `CLAMSCAN_BIN`, se mantiene MIME real/tamaño/rate limiting, pero el despliegue productivo debe proveer un antivirus antes de habilitar el portal.
 
 ## 6. Mapa de rutas
 
@@ -399,6 +492,10 @@ No se incluye un esquema completo porque las migraciones fuente están ausentes.
 - `company_locations`
 - `company_branches`
 - `employee_branch_assignments`
+- `user_access_scopes`
+- `organization_feature_policies`
+- `user_feature_overrides`
+- `access_audit_log`
 - `areas`
 - `users`
 - `user_clock_mappings`
@@ -425,6 +522,29 @@ Empresa: Ecofarma
 - La administración se realiza desde `/admin/editCompany/{id}`: el primer campo de cada fila es el nombre real de la sucursal; localidad y provincia se eligen por separado.
 - Quitar una fila de la pantalla la desactiva en lugar de borrarla, para conservar referencias e historial futuros.
 - `company_locations` sigue representando la ubicación general o principal de la empresa; no reemplaza a sus sucursales.
+
+#### Identidad visual por empresa
+
+Cada empresa puede tener un logo y un color principal propios. Se configuran en
+`/admin/editCompany/{id}`, dentro de **Información de la empresa**. El logo debe
+ser PNG, JPG, GIF o WEBP de hasta 2 MB; se guarda como archivo público en
+`public/img/companies/` y su ruta queda en `companies.logo_path`.
+
+El color se guarda en `companies.brand_color` como hexadecimal (`#RRGGBB`). Al
+elegir una empresa como contexto activo, `company_brand_helper.php` expone las
+variables CSS `--clr-primary`, `--clr-primary-d`, `--clr-primary-l` y
+`--clr-primary-xl`; de esa forma el sidebar, botones, encabezados y portal de
+empleados adoptan la identidad correcta. Por ejemplo, **La Naturaleza** usa el
+verde inicial `#2E7D32`.
+
+Para instalaciones existentes ejecutar una sola vez:
+
+```bash
+php scripts/apply_company_branding_migration.php
+```
+
+El script agrega `brand_color` y `logo_path` sin borrar datos existentes. La
+migración declarativa equivalente es `migration_company_branding.sql`.
 
 El aislamiento principal de RR. HH. continúa siendo por `users.company_id`, y las sedes
 operativas se asignan mediante `employee_branch_assignments`. Un empleado puede pertenecer
@@ -491,6 +611,20 @@ Aplicación, luego de backup y de las migraciones históricas:
 Get-Content -Raw migration_employee_record_complete.sql |
   C:\xamppcubo\mysql\bin\mysql.exe -u root -D paviotti_lanaturaleza --default-character-set=utf8mb4
 ```
+
+### Permisos por alcance
+
+`migration_access_control_scopes.sql` agrega perfiles por empresa o sucursal, políticas
+de módulos del portal, excepciones individuales y auditoría. La migración crea una
+asignación principal compatible para cada usuario existente: `empleado` → Operario,
+`supervisor` → Encargado y `admin` → Administrador. Puede ejecutarse con:
+
+```powershell
+php scripts\apply_access_control_migration.php
+```
+
+Luego, el editor de empresa muestra la matriz de módulos para la empresa y cada sucursal;
+la ficha de usuario permite configurar perfiles y excepciones individuales.
 
 La migración crea las tablas con `IF NOT EXISTS`, precarga nombres comerciales mediante
 upsert y migra la empresa principal actual solo cuando aún no existe esa relación. No elimina ni sobrescribe

@@ -129,6 +129,8 @@ class AdminController {
     }
 
     public function mapeoApi() {
+        redirect('admin/mapeoIncompleto');
+        /*
         requireAdminOnly();
         $employees = [];
         $error     = null;
@@ -175,7 +177,7 @@ class AdminController {
             'buscar_usuario'   => $buscarUsuario,
             'usuarios_busqueda'=> $buscarUsuario !== '' ? $this->userModel->searchUsersByName($buscarUsuario, 25) : [],
         ];
-        $this->view('admin/mapeo_api', $data);
+        $this->view('admin/mapeo_api', $data); */
     }
 
     public function saveMappingFromApi() {
@@ -243,20 +245,8 @@ class AdminController {
     // ─────────────────────────────────────────────────────────────────
 
     public function sync(){
-        // Estado de mapeo: qué empleados tienen clock_id configurado
-        $allUsers = $this->userModel->getUsersByCompany($_SESSION['user_company_id']);
-        $mappingStatus = [];
-        foreach ($allUsers as $user) {
-            $mappings = $this->userModel->getClockMappingsForUser($user->id);
-            $clockIds = array_values(array_filter($mappings));
-            $mappingStatus[] = [
-                'full_name'   => $user->full_name,
-                'has_mapping' => !empty($clockIds),
-                'clock_ids'   => $clockIds,
-            ];
-        }
-        $data = ['mapping_status' => $mappingStatus];
-        $this->view('admin/sync', $data);
+        requireAdminOnly();
+        $this->view('admin/sync', []);
     }
 
     public function runApiSync(){
@@ -514,9 +504,17 @@ class AdminController {
      * Detalle planificado vs fichado (enlace desde dashboard).
      */
     public function attendance() {
+        $query = $_GET;
+        redirect('admin/controlAsistencia' . (!empty($query) ? '?' . http_build_query($query) : ''));
+    }
+
+    /** Panel diario único: plan, fichadas, estado y resolución. */
+    public function controlAsistencia() {
         $companyId = requireAdminCompany('admin/dashboard');
         $workDate = $_GET['date'] ?? date('Y-m-d');
         $statusFilter = $_GET['status'] ?? 'alerts';
+        $branchId = (int)($_GET['branch_id'] ?? 0);
+        $userIdFilter = (int)($_GET['user_id'] ?? 0);
 
         if (!empty($_GET['recompute'])) {
             redirect('admin/attendance?date=' . urlencode($workDate) . '&status=' . urlencode($statusFilter));
@@ -531,6 +529,24 @@ class AdminController {
             $rows = filterStaffRowsByUserArea(
                 $this->attendanceSummaryModel->getAllForDate($companyId, $workDate, $statusFilter)
             );
+            $rows = array_values(array_filter($rows, function ($row) use ($branchId, $userIdFilter) {
+                if ($userIdFilter > 0 && (int)$row->user_id !== $userIdFilter) return false;
+                if ($branchId <= 0) return true;
+                $user = $this->userModel->getUserById((int)$row->user_id);
+                if ((int)($user->branch_id ?? 0) === $branchId) return true;
+                foreach ($this->userModel->getBranchAssignmentsForUser((int)$row->user_id) as $branch) if ((int)$branch->id === $branchId) return true;
+                return false;
+            }));
+            foreach ($rows as $row) {
+                $user = $this->userModel->getUserById((int)$row->user_id);
+                $row->branch_name = '';
+                foreach ($this->userModel->getBranchAssignmentsForUser((int)$row->user_id) as $branch) {
+                    if (!empty($branch->is_primary)) { $row->branch_name = $branch->name; break; }
+                    if ($row->branch_name === '') $row->branch_name = $branch->name;
+                }
+                $row->attendance_control_mode = User::normalizeAttendanceControlMode($user->attendance_control_mode ?? 'required');
+                $row->device_names = implode(', ', $this->marcacionesCacheModel->getDeviceNamesForUserDay((int)$row->user_id, $workDate));
+            }
             $stats = $this->attendanceSummaryModel->getDashboardSummary($companyId, $workDate);
         } catch (Exception $e) {
             $_SESSION['flash_error'] = 'Módulo de asistencia no disponible. Ejecute migration_attendance_summary.sql.';
@@ -542,8 +558,12 @@ class AdminController {
             'status_filter' => $statusFilter,
             'rows'          => $rows,
             'stats'         => $stats,
+            'branches'      => $this->companyModel->getBranches($companyId, false),
+            'employees'     => $this->userModel->getUsersByCompany($companyId),
+            'branch_id'     => $branchId,
+            'user_id_filter'=> $userIdFilter,
         ];
-        $this->view('admin/attendance', $data);
+        $this->view('admin/control_asistencia', $data);
     }
 
     public function recomputeAttendance() {
@@ -960,6 +980,7 @@ class AdminController {
         $companies = $this->companyModel->getAllCompanies();
         $this->view('admin/companies', [
             'companies' => $companies,
+            'policy_templates_ready' => (new AccessControl())->isReady(),
             'location_ready' => $this->companyModel->locationReady(),
             'show_overtime_column' => $this->companyModel->hasShowOvertimeColumn(),
             'show_cp_extras_column' => $this->companyModel->hasShowCpExtrasColumn(),
@@ -979,6 +1000,7 @@ class AdminController {
             $name = postString('company_name');
             $locality = postString('locality');
             $province = postString('province');
+            $brandColor = strtoupper(postString('brand_color') ?: '#E91E8C');
             $branches = isset($_POST['branches']) && is_array($_POST['branches']) ? $_POST['branches'] : [];
             $showOt = null;
             $showCp = null;
@@ -1002,11 +1024,23 @@ class AdminController {
                     $_SESSION['flash_error'] = 'La empresa se actualizó, pero revisá que cada sucursal tenga nombre, localidad y provincia.';
                     redirect('admin/editCompany/' . $id);
                 }
+                $this->applyNewBranchPolicyTemplates($id, $branches);
+                if ($this->companyModel->brandingReady()) {
+                    $logoPath = $this->storeCompanyLogo($id);
+                    if ($logoPath === false) {
+                        $_SESSION['flash_error'] = 'La empresa se actualizó, pero no se pudo guardar el logo. Usá PNG, JPG, GIF o WEBP de hasta 2 MB.';
+                        redirect('admin/editCompany/' . $id);
+                    }
+                    if (!$this->companyModel->saveBranding($id, $brandColor, $logoPath)) {
+                        $_SESSION['flash_error'] = 'La empresa se actualizó, pero no se pudo guardar su identidad visual.';
+                        redirect('admin/editCompany/' . $id);
+                    }
+                }
                 if ((int)($_SESSION['user_company_id'] ?? 0) === (int)$id) {
                     $_SESSION['user_company_name'] = $name;
                 }
-                $_SESSION['flash_success'] = 'Empresa actualizada.';
-                redirect('admin/companies');
+                $_SESSION['flash_success'] = 'Empresa actualizada. Las sucursales nuevas ya tienen su política inicial.';
+                redirect('admin/editCompany/' . $id);
             } else {
                 $_SESSION['flash_error'] = 'No se pudo actualizar la empresa.';
             }
@@ -1021,6 +1055,7 @@ class AdminController {
             'uses_cp_tasks' => $usesCp,
             'show_overtime_column' => $this->companyModel->hasShowOvertimeColumn(),
             'show_cp_extras_column' => $this->companyModel->hasShowCpExtrasColumn(),
+            'branding' => $this->companyModel->getBranding($id),
         ]);
     }
 
@@ -1037,23 +1072,87 @@ class AdminController {
             redirect('admin/companies');
         }
 
-        if($this->companyModel->createCompany($companyName)){
-            $_SESSION['flash_success'] = 'Empresa creada correctamente.';
+        $companyId = $this->companyModel->createCompany($companyName);
+        if($companyId){
+            $sourceCompanyId = (int)($_POST['policy_source_company_id'] ?? 0);
+            $access = new AccessControl();
+            if ($sourceCompanyId > 0 && $access->isReady()) {
+                $access->copyPolicies($sourceCompanyId, 0, $companyId, 0, (int)$_SESSION['user_id']);
+            }
+            $_SESSION['flash_success'] = $sourceCompanyId > 0 ? 'Empresa creada con los permisos de la empresa modelo.' : 'Empresa creada correctamente. Configurá sus permisos antes de asignar empleados.';
+            redirect('admin/editCompany/' . $companyId);
         } else {
             $_SESSION['flash_error'] = 'No se pudo crear la empresa.';
         }
         redirect('admin/companies');
     }
 
+    /** Aplica una plantilla sólo a las sucursales creadas en este envío. */
+    private function applyNewBranchPolicyTemplates($companyId, array $branches) {
+        $access = new AccessControl();
+        if (!$access->isReady()) return;
+        foreach ($branches as $branch) {
+            if ((int)($branch['id'] ?? 0) > 0) continue;
+            $source = trim((string)($branch['policy_template'] ?? ''));
+            if ($source === '' || $source === 'inherit') continue;
+            $parts = explode(':', $source);
+            if (count($parts) !== 2) continue;
+            $sourceCompanyId = (int)$parts[0]; $sourceBranchId = (int)$parts[1];
+            $name = trim((string)($branch['name'] ?? ''));
+            if ($sourceCompanyId <= 0 || $name === '') continue;
+            foreach ($this->companyModel->getBranches($companyId, false) as $savedBranch) {
+                if ($savedBranch->name === $name) {
+                    $access->copyPolicies($sourceCompanyId, $sourceBranchId, $companyId, (int)$savedBranch->id, (int)$_SESSION['user_id']);
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Guarda logos públicos de empresa fuera de los uploads privados. */
+    private function storeCompanyLogo($companyId) {
+        if (empty($_FILES['company_logo']) || ($_FILES['company_logo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return null;
+        $file = $_FILES['company_logo'];
+        $valid = uploads_validate_uploaded_file($file, uploads_avatar_extensions(), uploads_avatar_mimes(), 2097152);
+        if (!$valid['ok']) return false;
+        $dir = dirname(APPROOT) . '/public/img/companies/';
+        if (!is_dir($dir) && !mkdir($dir, 0755, true)) return false;
+        try { $token = bin2hex(random_bytes(8)); } catch (Throwable $e) { $token = uniqid(); }
+        $filename = 'company_' . (int)$companyId . '_' . $token . '.' . $valid['ext'];
+        if (!move_uploaded_file($file['tmp_name'], $dir . $filename)) return false;
+        return 'img/companies/' . $filename;
+    }
+
     public function users() {
         requireAdminOnly();
         $companyFilter = isset($_GET['company_id']) ? (int)$_GET['company_id'] : 0;
         $users = $this->userModel->getAllUsersWithCompany($companyFilter > 0 ? $companyFilter : null);
+        $recordReady = $this->employeeRecordModel->isReady();
+        $recordMetadata = $recordReady ? $this->employeeRecordModel->getUserListMetadata($companyFilter > 0 ? $companyFilter : null) : [];
+        foreach ($users as $user) {
+            $meta = $recordMetadata[(int)$user->id] ?? null;
+            foreach (['employee_number','employment_status','work_mode','employment_type','start_date','end_date','position_name','area_name','supervisor_name','branch_names','branch_count','has_structured_address','has_health_coverage'] as $field) {
+                $user->$field = $meta->$field ?? null;
+            }
+            $checks = [
+                !empty($user->document_number) || !empty($user->cuil),
+                !empty($user->email) || !empty($user->phone_number),
+                !empty($user->hire_date),
+                !empty($user->position_name),
+                (int)($user->branch_count ?? 0) > 0,
+                !empty($user->has_structured_address),
+                !empty($user->has_health_coverage),
+            ];
+            $user->record_completed = count(array_filter($checks));
+            $user->record_total = count($checks);
+            $user->record_percent = (int)round($user->record_completed * 100 / max(1, $user->record_total));
+        }
         $companies = $this->companyModel->getAllCompanies();
         $this->view('admin/users', [
             'users'          => $users,
             'companies'      => $companies,
             'company_filter' => $companyFilter,
+            'employee_record_ready' => $recordReady,
         ]);
     }
 
@@ -1187,6 +1286,7 @@ class AdminController {
                 'company_id' => isset($_POST['company_id']) ? (int)$_POST['company_id'] : 0,
                 'branch_id' => isset($_POST['branch_id']) ? (int)$_POST['branch_id'] : 0,
                 'branch_ids' => isset($_POST['branch_ids']) && is_array($_POST['branch_ids']) ? $_POST['branch_ids'] : [],
+                'attendance_control_mode' => User::normalizeAttendanceControlMode($_POST['attendance_control_mode'] ?? 'required'),
                 'employee_group' => User::normalizeOrganizationGroup($_POST['employee_group'] ?? 'paviotti'),
                 'profile_picture' => 'default.png',
                 'errors' => [],
@@ -1239,6 +1339,14 @@ class AdminController {
                 $data['password_hash'] = password_hash($data['password'], PASSWORD_DEFAULT);
                 if($this->userModel->createUser($data)){
                     $createdUser = $this->userModel->getUserByUsername($data['username']);
+                    if ($createdUser && (new AccessControl())->isReady()) {
+                        (new AccessControl())->saveScopes((int)$createdUser->id, [[
+                            'company_id' => (int)$data['company_id'],
+                            'branch_id' => (int)($data['branch_id'] ?? 0),
+                            'access_role' => $data['role'] === 'admin' ? 'administrador' : ($data['role'] === 'supervisor' ? 'encargado' : 'operario'),
+                            'is_primary' => 1, 'is_active' => 1, 'starts_on' => $data['hire_date'] ?? '',
+                        ]], (int)$_SESSION['user_id']);
+                    }
                     if ($createdUser && !$this->employeeRecordModel->save((int)$createdUser->id, $data['company_id'], $data['area_id'], $data['agreement_id'], $data['hire_date'], $data)) {
                         $_SESSION['flash_error'] = 'El usuario fue creado, pero no se pudo completar el legajo ampliado.';
                     }
@@ -1275,6 +1383,7 @@ class AdminController {
                 'company_id' => $companyId,
                 'branch_id' => isset($_POST['branch_id']) ? (int)$_POST['branch_id'] : 0,
                 'branch_ids' => isset($_POST['branch_ids']) && is_array($_POST['branch_ids']) ? $_POST['branch_ids'] : [],
+                'attendance_control_mode' => User::normalizeAttendanceControlMode($_POST['attendance_control_mode'] ?? 'required'),
                 'employee_group' => User::normalizeOrganizationGroup($_POST['employee_group'] ?? 'paviotti'),
                 'hourly_rate' => isset($_POST['hourly_rate']) ? trim($_POST['hourly_rate']) : 0,
                 'weekly_hour_limit' => isset($_POST['weekly_hour_limit']) ? trim($_POST['weekly_hour_limit']) : '',
@@ -2893,6 +3002,31 @@ class AdminController {
         fclose($out);
         exit();
     }
+
+    public function attendanceClosures() {
+        require_capability('attendance.prepare');
+        $companyId = requireAdminCompany('admin/dashboard');
+        $month = preg_match('/^\d{4}-\d{2}$/', $_GET['month'] ?? '') ? $_GET['month'] : date('Y-m');
+        $suite = new HrSuite();
+        $closures = $suite->query('SELECT ac.*,u.full_name prepared_name,cu.full_name closed_name FROM attendance_closures ac LEFT JOIN users u ON u.id=ac.prepared_by LEFT JOIN users cu ON cu.id=ac.closed_by WHERE ac.company_id=? ORDER BY ac.period_month DESC,ac.version_no DESC', [$companyId]);
+        $preview = $this->attendanceSummaryModel->getMonthReportByCompany($companyId, $month);
+        $this->view('admin/attendance_closures', compact('month','closures','preview'));
+    }
+
+    public function prepareAttendanceClosure() {
+        require_capability('attendance.prepare'); if ($_SERVER['REQUEST_METHOD'] !== 'POST') redirect('admin/attendanceClosures'); csrf_verify();
+        $companyId=requireAdminCompany(); $month=preg_match('/^\d{4}-\d{2}$/',$_POST['month']??'')?$_POST['month']:date('Y-m'); $suite=new HrSuite();
+        $rows=$this->attendanceSummaryModel->getMonthReportByCompany($companyId,$month); $snapshot=$this->attendanceClosureSnapshot($suite,$companyId,$month,$rows); $json=json_encode($snapshot,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        $last=$suite->one('SELECT MAX(version_no) n FROM attendance_closures WHERE company_id=? AND period_month=?',[$companyId,$month]); $version=(int)($last->n??0)+1;
+        $suite->execute("INSERT INTO attendance_closures(company_id,period_month,version_no,status,snapshot_json,snapshot_hash,prepared_by,prepared_at) VALUES(?,?,?,'draft',?,?,?,NOW())",[$companyId,$month,$version,$json,hash('sha256',$json),(int)$_SESSION['user_id']]);
+        $id=$suite->one('SELECT LAST_INSERT_ID() id')->id;$suite->audit()->record('attendance.closure.prepared','attendance_closure',$id,null,['month'=>$month,'version'=>$version,'snapshot_hash'=>hash('sha256',$json)],trim($_POST['reason']??''),$companyId);$_SESSION['flash_success']='Cierre preparado. Revisalo antes de congelarlo.';redirect('admin/attendanceClosures?month='.$month);
+    }
+
+    public function closeAttendanceClosure($id) {require_capability('attendance.close');if($_SERVER['REQUEST_METHOD']!=='POST')redirect('admin/attendanceClosures');csrf_verify();$suite=new HrSuite();$c=$suite->one("SELECT * FROM attendance_closures WHERE id=? AND company_id=? AND status='draft'",[(int)$id,adminCompanyId()]);if($c){$suite->execute("UPDATE attendance_closures SET status='closed',closed_by=?,closed_at=NOW() WHERE id=?",[(int)$_SESSION['user_id'],$id]);$suite->audit()->record('attendance.closure.closed','attendance_closure',$id,['status'=>'draft'],['status'=>'closed'],trim($_POST['reason']??''),adminCompanyId());}redirect('admin/attendanceClosures?month='.($c->period_month??date('Y-m')));}
+    public function reopenAttendanceClosure($id) {require_capability('attendance.close');if($_SERVER['REQUEST_METHOD']!=='POST')redirect('admin/attendanceClosures');csrf_verify();$reason=trim($_POST['reason']??'');if($reason===''){$_SESSION['flash_error']='La reapertura requiere motivo.';redirect('admin/attendanceClosures');}$suite=new HrSuite();$c=$suite->one("SELECT * FROM attendance_closures WHERE id=? AND company_id=? AND status='closed'",[(int)$id,adminCompanyId()]);if($c){$suite->execute("UPDATE attendance_closures SET status='reopened',reopened_at=NOW(),reopen_reason=? WHERE id=?",[$reason,$id]);$suite->audit()->record('attendance.closure.reopened','attendance_closure',$id,['status'=>'closed'],['status'=>'reopened'],$reason,adminCompanyId());}redirect('admin/attendanceClosures?month='.($c->period_month??date('Y-m')));}
+    public function exportAttendanceClosureCsv($id){require_capability('attendance.review');$suite=new HrSuite();$c=$suite->one('SELECT * FROM attendance_closures WHERE id=? AND company_id=?',[(int)$id,adminCompanyId()]);if(!$c){http_response_code(404);exit;}$s=json_decode($c->snapshot_json,true);header('Content-Type:text/csv;charset=UTF-8');header('Content-Disposition:attachment;filename="novedades_'.$c->period_month.'_v'.$c->version_no.'.csv"');$o=fopen('php://output','w');fprintf($o,chr(0xEF).chr(0xBB).chr(0xBF));fputcsv($o,['Empleado','Días','OK','Tardanzas','Ausencias','Licencias','Salidas tempranas','Falta salida','Horas extra 50%','Horas extra 100%'],';');foreach($s['employees']??[] as $r)fputcsv($o,array_values($r),';');fclose($o);exit;}
+    public function exportAttendanceClosurePdf($id){require_capability('attendance.review');$suite=new HrSuite();$c=$suite->one('SELECT * FROM attendance_closures WHERE id=? AND company_id=?',[(int)$id,adminCompanyId()]);if(!$c){http_response_code(404);exit;}$s=json_decode($c->snapshot_json,true);(new SimplePdfService())->download('novedades_'.$c->period_month.'_v'.$c->version_no.'.pdf','Novedades mensuales',['Empleado','Días','OK','Tarde','Aus.','Lic.','Salida temp.','Falta salida','HE 50','HE 100'],array_map('array_values',$s['employees']??[]),['Período'=>$c->period_month,'Versión'=>$c->version_no,'Hash'=>$c->snapshot_hash,'Carácter'=>'Informativo; sin importes ni liquidación salarial']);}
+    private function attendanceClosureSnapshot($suite,$companyId,$month,$rows){$start=$month.'-01';$end=date('Y-m-t',strtotime($start));$details=$suite->query("SELECT ads.user_id,SUM(ads.status='early_leave') early,SUM(ads.status='missing_out') missing_out,COALESCE(SUM(CASE WHEN oe.status='archived' THEN oe.hours_50 ELSE 0 END),0) h50,COALESCE(SUM(CASE WHEN oe.status='archived' THEN oe.hours_100 ELSE 0 END),0) h100 FROM attendance_day_summary ads LEFT JOIN overtime_entries oe ON oe.user_id=ads.user_id AND oe.entry_date=ads.work_date WHERE ads.company_id=? AND ads.work_date BETWEEN ? AND ? GROUP BY ads.user_id",[$companyId,$start,$end]);$map=[];foreach($details as $d)$map[$d->user_id]=$d;$out=[];foreach($rows as $r){$x=$map[$r->user_id]??(object)[];$out[]=['employee'=>$r->full_name,'days'=>(int)$r->days_total,'ok'=>(int)$r->days_ok,'late'=>(int)$r->days_late,'absence'=>(int)$r->days_no_show,'leave'=>(int)$r->days_leave,'early'=>(int)($x->early??0),'missing_out'=>(int)($x->missing_out??0),'h50'=>(float)($x->h50??0),'h100'=>(float)($x->h100??0)];}return ['company_id'=>$companyId,'period'=>$month,'generated_at'=>date(DATE_ATOM),'employees'=>$out];}
 
     private function view($view, $data = []){
         if (file_exists('../app/views/' . $view . '.php')) {

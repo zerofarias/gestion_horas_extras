@@ -51,6 +51,10 @@ function setAdminActiveCompany($companyId) {
     if (!$companyModel->getById($companyId)) {
         return false;
     }
+    if (function_exists('access_control_ready') && access_control_ready()
+        && !access_user_can_manage_company((int)$_SESSION['user_id'], $companyId)) {
+        return false;
+    }
     if (isSupervisor()) {
         $admin = (new User())->getUserById((int)($_SESSION['user_id'] ?? 0));
         if (!$admin || (int)($admin->company_id ?? 0) !== $companyId) {
@@ -137,6 +141,11 @@ function requireAdminOnly($redirectTo = 'admin/dashboard') {
     if (!isLoggedIn() || !isStaffAdmin()) {
         redirect('login');
     }
+    if (function_exists('access_control_ready') && access_control_ready()
+        && !in_array(access_current_role(), ['administrador', 'rrhh'], true)) {
+        $_SESSION['flash_error'] = 'Esta acción requiere perfil Administrador o RRHH.';
+        redirect($redirectTo);
+    }
     if (isSupervisor()) {
         $_SESSION['flash_error'] = 'Esta acción solo está disponible para administradores RRHH.';
         redirect($redirectTo);
@@ -148,6 +157,18 @@ function supervisorCanAccessUser($user) {
         return false;
     }
     if ((int)($user->company_id ?? 0) !== adminCompanyId()) {
+        return false;
+    }
+    if (function_exists('access_control_ready') && access_control_ready()) {
+        $role = access_current_role();
+        if ($role === 'administrador' || $role === 'rrhh' || $role === 'coordinador') {
+            return access_can_manage_company((int)($user->company_id ?? 0), 0);
+        }
+        if ($role === 'encargado') {
+            $scope = access_current_scope();
+            return $scope && (int)($scope->company_id ?? 0) === (int)($user->company_id ?? 0)
+                && (int)($scope->branch_id ?? 0) > 0 && (new User())->isUserAssignedToBranch((int)$user->id, (int)$scope->branch_id);
+        }
         return false;
     }
     if (!isSupervisor()) {

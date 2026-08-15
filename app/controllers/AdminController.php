@@ -106,7 +106,7 @@ class AdminController {
         $companies = $this->companyModel->getAllCompanies();
         $branches = [];
         foreach ($companies as $company) {
-            foreach ($this->companyModel->getBranches((int)$company->id, false) as $branch) $branches[] = $branch;
+            foreach ($this->companyModel->getBranches((int)$company->id, false) as $branch) { $branch->company_name = $company->name; $branches[] = $branch; }
         }
         $this->view('admin/clock_devices', [
             'devices' => $this->clockDeviceModel->getAllWithScopes(),

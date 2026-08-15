@@ -28,8 +28,8 @@ function marcacionesQueryString($filters, $viewMode, $overrides = []) {
     <div class="admin-page-brand">
         <div class="admin-page-icon"><i class="fas fa-fingerprint"></i></div>
         <div class="admin-page-meta">
-            <h2 class="page-title mb-0">Todas las marcaciones</h2>
-            <p class="page-subtitle mb-0">Por persona y día: mismas horas que el perfil (pares o 1ª entrada + última salida)</p>
+            <h2 class="page-title mb-0">Historial de fichadas</h2>
+            <p class="page-subtitle mb-0">Auditoría de reloj, persona recibida y vínculo con el sistema</p>
         </div>
     </div>
     <div class="admin-page-actions">
@@ -193,6 +193,7 @@ function marcacionesQueryString($filters, $viewMode, $overrides = []) {
                         <th>Salidas</th>
                         <th>Jornada</th>
                         <th>Reloj</th>
+                        <th>Empresa / sucursal</th>
                         <th>Sistema</th>
                         <th style="width:70px" class="text-center">Marcas</th>
                     </tr>
@@ -336,6 +337,7 @@ function marcacionesQueryString($filters, $viewMode, $overrides = []) {
                     </td>
                     <td><?php echo marcMappingBadge($m->user_id); ?></td>
                     <td><?php echo marcClockBadge($m->device_name, $clockMap); ?></td>
+                    <td class="small"><div><?php echo htmlspecialchars($m->company_name ?? 'Sin asignar'); ?></div><div class="text-muted"><?php echo htmlspecialchars(($m->employee_branch_name ?? '') ?: ($m->clock_branch_names ?? '')); ?></div></td>
                     <td><?php echo date('d/m/Y', strtotime($m->event_time)); ?></td>
                     <td><strong><?php echo date('H:i:s', strtotime($m->event_time)); ?></strong></td>
                     <td><?php echo marcDirectionBadge($m->direction ?? null, $m->direction_label ?? null); ?></td>

@@ -83,9 +83,14 @@ class MarcacionesCache {
      * @param array $filters start_date, end_date, device_name, employee_id, person_q, mapped, direction, branch_id
      */
     public function getAll($filters = [], $companyId = null) {
-        $query = 'SELECT mc.*, u.full_name
+        $query = 'SELECT mc.*, u.full_name, c.name AS company_name, b.name AS employee_branch_name,
+                  (SELECT GROUP_CONCAT(cb2.name ORDER BY cb2.name SEPARATOR ", ") FROM clock_devices cd2
+                   JOIN clock_device_branches cdb2 ON cdb2.clock_device_id = cd2.id AND cdb2.is_active = 1
+                   JOIN company_branches cb2 ON cb2.id = cdb2.branch_id WHERE cd2.external_name = mc.device_name) AS clock_branch_names
                   FROM marcaciones_cache mc
                   LEFT JOIN users u ON mc.user_id = u.id
+                  LEFT JOIN companies c ON c.id = u.company_id
+                  LEFT JOIN company_branches b ON b.id = u.branch_id
                   WHERE 1=1';
 
         if ($companyId !== null && $this->clockScopeReady()) {
